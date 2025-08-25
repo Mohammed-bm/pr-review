@@ -1,0 +1,13 @@
+# Node.js
+backend/node_modules/
+backend/.env
+
+# Python
+ai-service/venv/
+ai-service/__pycache__/
+ai-service/.env
+
+# General
+.DS_Store
+.vscode/
+.env
