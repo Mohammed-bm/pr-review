@@ -1,0 +1,84 @@
+day 7
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+app = FastAPI(title="AI Code Reviewer - Day 7")
+
+# --------------------
+# Models
+# --------------------
+class DiffInput(BaseModel):
+    repo_name: str
+    pr_number: int
+    diff: str
+
+class AgentOutput(BaseModel):
+    result: str
+
+class AnalysisOutput(BaseModel):
+    repo_name: str
+    pr_number: int
+    lint: AgentOutput
+    bugs: AgentOutput
+    security: AgentOutput
+    performance: AgentOutput
+
+# --------------------
+# Agent Setup
+# --------------------
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+
+lint_prompt = PromptTemplate.from_template("""
+You are a Lint & Style Checker. Review the following diff for formatting,
+naming conventions, and code style issues.
+Diff:
+{diff}
+""")
+
+bug_prompt = PromptTemplate.from_template("""
+You are a Bug Detector. Analyze the following diff for logical or functional bugs.
+Diff:
+{diff}
+""")
+
+security_prompt = PromptTemplate.from_template("""
+You are a Security Scanner. Review the following diff for vulnerabilities,
+hardcoded secrets, injections, or risky code.
+Diff:
+{diff}
+""")
+
+performance_prompt = PromptTemplate.from_template("""
+You are a Performance Reviewer. Review the following diff for inefficiencies
+or performance bottlenecks.
+Diff:
+{diff}
+""")
+
+# --------------------
+# Endpoint
+# --------------------
+@app.post("/analyze", response_model=AnalysisOutput)
+def analyze_diff(data: DiffInput):
+    try:
+        lint_result = llm.predict(lint_prompt.format(diff=data.diff))
+        bug_result = llm.predict(bug_prompt.format(diff=data.diff))
+        security_result = llm.predict(security_prompt.format(diff=data.diff))
+        perf_result = llm.predict(performance_prompt.format(diff=data.diff))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+
+    return AnalysisOutput(
+        repo_name=data.repo_name,
+        pr_number=data.pr_number,
+        lint=AgentOutput(result=lint_result.strip()),
+        bugs=AgentOutput(result=bug_result.strip()),
+        security=AgentOutput(result=security_result.strip()),
+        performance=AgentOutput(result=perf_result.strip()),
+    )

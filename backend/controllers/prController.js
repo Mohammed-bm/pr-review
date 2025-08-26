@@ -16,6 +16,20 @@ const createPR = async (req, res, next) => {
       author,
     });
 
+    try {
+      const response = await axios.post("http://localhost:8000/analyze", {
+        repo_name: repoName,
+        pr_number: prNumber,
+        diff: "sample diff for now" // ✅ later we will use actual diff
+      });
+
+      // Step 3: Save AI analysis into PR
+      pr.analysis = response.data;
+      await pr.save();
+    } catch (aiError) {
+      console.error("⚠️ AI Service Error:", aiError.message);
+    }
+    
     res.status(201).json(pr);
   } catch (err) {
     next(err);
@@ -83,4 +97,30 @@ const getPRDiff = async (req, res, next) => {
   }
 };
 
-module.exports = { createPR, getPRs, getPRDiff };
+const getPRDiffAnalysis = async (req, res, next) => {
+  try {
+    const pr = await PullRequest.findById(req.params.id);
+    if (!pr) {
+      return res.status(404).json({ msg: "PR not found" });
+    }
+
+    // Call AI service with the diff
+    const response = await axios.post("http://localhost:8000/analyze", {
+      repo_name: pr.repoName,
+      pr_number: pr.prNumber,
+      diff: pr.diff || "",
+    });
+
+    res.json({
+      repo_name: pr.repoName,
+      pr_number: pr.prNumber,
+      summary: response.data.summary,
+      improvements: response.data.improvements,
+      risks: response.data.risks,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { createPR, getPRs, getPRDiff, getPRDiffAnalysis};
