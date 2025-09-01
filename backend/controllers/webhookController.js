@@ -1,6 +1,7 @@
 const PullRequest = require("../models/PullRequest");
 const axios = require('axios');
-const fetchDiff = require("../utils/fetchDiff"); // Make sure this is imported
+const fetchDiff = require("../utils/fetchDiff");
+const githubService = require("../services/githubService"); // Import the GitHub service
 
 // Function to call AI service
 const callAIService = async (repoName, prNumber, diff) => {
@@ -63,7 +64,7 @@ const githubWebhook = async (req, res) => {
           prNumber: prNumber,
           title: pr.title,
           author: pr.user.login,
-          status: pr.state,
+          status: pr.state, // PR status from GitHub
           htmlUrl: pr.html_url,
           diffUrl: pr.diff_url,
           diff: diffText,
@@ -75,7 +76,7 @@ const githubWebhook = async (req, res) => {
           comments: aiAnalysis.comments,
           fixSuggestions: aiAnalysis.fix_suggestions,
           analyzedAt: new Date(),
-          status: 'analyzed'
+          analysisStatus: 'analyzed' // Use analysisStatus, not status
         },
         { upsert: true, new: true }
       );
@@ -84,8 +85,29 @@ const githubWebhook = async (req, res) => {
       console.log(`📊 Score: ${aiAnalysis.score}`);
       console.log(`📝 Summary: ${aiAnalysis.summary}`);
 
+      // POST REVIEW TO GITHUB - DAY 10 IMPLEMENTATION
+      try {
+        console.log(`📤 Posting review to GitHub PR #${prNumber}...`);
+        const githubResponse = await githubService.postReviewComment(repoName, prNumber, aiAnalysis);
+        console.log(`✅ Review successfully posted to GitHub PR #${prNumber}`);
+        
+        // Update PR with GitHub review info
+        await PullRequest.findOneAndUpdate(
+          { prNumber: prNumber, repoName: repoName },
+          { 
+            githubReviewPosted: true,
+            githubReviewPostedAt: new Date(),
+            githubReviewId: githubResponse.id
+          }
+        );
+        
+      } catch (githubError) {
+        console.error('❌ Failed to post to GitHub, but analysis was saved:', githubError.message);
+        // Continue anyway - the analysis is saved in DB
+      }
+
       res.status(200).json({ 
-        message: 'PR analyzed and saved successfully', 
+        message: 'PR analyzed and review posted successfully', 
         data: aiAnalysis 
       });
 
@@ -105,14 +127,8 @@ const githubWebhook = async (req, res) => {
           diffUrl: pr.diff_url,
           diff: diffText,
           action: req.body.action,
-          // AI Analysis Results:
-          score: aiAnalysis.score,
-          categories: aiAnalysis.categories,
-          summary: aiAnalysis.summary,
-          comments: aiAnalysis.comments,
-          fixSuggestions: aiAnalysis.fix_suggestions,
-          analyzedAt: new Date(),
-          analysisStatus: 'analyzed' // Use analysisStatus, not status
+          analysisStatus: 'failed',
+          error: error.message
         },
         { upsert: true, new: true }
       );

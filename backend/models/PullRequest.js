@@ -36,7 +36,12 @@ const pullRequestSchema = new mongoose.Schema(
       enum: ["pending", "analyzed", "failed"], 
       default: "pending" 
     },
-    error: { type: String }
+    error: { type: String },
+    
+    // GitHub Review Fields - ADD THESE
+    githubReviewPosted: { type: Boolean, default: false },
+    githubReviewPostedAt: { type: Date },
+    githubReviewId: { type: Number } // GitHub's review ID
   },
   { timestamps: true }
 );
