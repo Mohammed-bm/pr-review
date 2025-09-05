@@ -67,7 +67,7 @@ index a1b2c3d..e4f5g6h 100644
         status: 'open',
         htmlUrl: 'https://github.com/test/user-repo/pull/123',
         diffUrl: 'https://github.com/test/user-repo/pull/123.diff',
-        diff: testDiff,
+        diff: diffTest,
         action: 'opened',
         score: mockData.score,
         categories: mockData.categories,

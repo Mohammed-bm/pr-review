@@ -165,7 +165,14 @@ class PerformanceReviewAgent:
 
 class CoordinatorAgent:
     def __init__(self):
-        self.system_prompt = "You are a Coordinator Agent. Merge results from multiple code review agents."
+        self.system_prompt = """
+        You are a Coordinator Agent. Merge results from multiple code review agents.
+
+        When creating the final JSON:
+        - Always include a "line" number for every comment.
+        - If you cannot determine the exact line, pick the first changed line in the corresponding @@ hunk.
+        - Never leave "line" as null.
+        """
     
     async def coordinate(self, results: Dict[str, Any]) -> Dict[str, Any]:
         try:

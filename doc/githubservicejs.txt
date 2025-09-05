@@ -6,43 +6,7 @@ class GitHubService {
     this.token = process.env.GITHUB_TOKEN; // Changed to GITHUB_TOKEN
   }
 
-  async postReviewComment(repo, prNumber, reviewData) {
-    try {
-      const [owner, repoName] = repo.split('/');
-      
-      // Determine review event based on score
-      let event = 'COMMENT';
-      if (reviewData.score < 50) {
-        event = 'REQUEST_CHANGES';
-      } else if (reviewData.score >= 80) {
-        event = 'APPROVE';
-      }
-
-      const reviewPayload = {
-        body: this.formatReviewBody(reviewData),
-        event: event,
-        comments: this.formatInlineComments(reviewData.comments)
-      };
-
-      const response = await axios.post(
-        `${this.baseURL}/repos/${owner}/${repoName}/pulls/${prNumber}/reviews`,
-        reviewPayload,
-        {
-          headers: {
-            'Authorization': `token ${this.token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'AI-Code-Reviewer'
-          }
-        }
-      );
-
-      console.log(`✅ Review posted to PR #${prNumber} with event: ${event}`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Failed to post review to GitHub:', error.response?.data || error.message);
-      throw error;
-    }
-  }
+  async postReviewComment(repo, prNumber, reviewData) { try { const [owner, repoName] = repo.split("/"); let event = "COMMENT"; if (reviewData.score < 50) event = "REQUEST_CHANGES"; else if (reviewData.score >= 80) event = "APPROVE"; const files = await this.getPRFiles(owner, repoName, prNumber); console.log("📄 PR files:", files.map(f => f.filename)); // Normalize comment paths const normalizedComments = reviewData.comments.map(comment => { const match = files.find(f => f.filename.endsWith(comment.path)); if (match) comment.path = match.filename; return comment; }); const inlineComments = this.mapLineToPosition(files, normalizedComments); if (inlineComments.length === 0) { console.log("⚠️ No inline comments mapped, posting only summary."); } const reviewPayload = { body: this.formatReviewBody(reviewData), event, comments: inlineComments, }; const response = await axios.post( ${this.baseURL}/repos/${owner}/${repoName}/pulls/${prNumber}/reviews, reviewPayload, { headers: { Authorization: token ${this.token}, Accept: "application/vnd.github.v3+json", "User-Agent": "AI-Code-Reviewer", }, } ); console.log(✅ Review posted to PR #${prNumber} with event: ${event}); return response.data; } catch (error) { console.error("❌ Failed to post review to GitHub:", error.response?.data || error.message); throw error; } }
 
   formatReviewBody(reviewData) {
     return `## 🤖 AI Code Review Summary

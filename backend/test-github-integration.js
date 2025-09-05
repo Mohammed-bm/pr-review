@@ -7,7 +7,7 @@ const testGitHubIntegration = async () => {
 
   // Updated with your new PR info
   const testRepo = 'Mohammed-bm/exam-app';
-  const testPRNumber = 9; // Replace with the actual PR number for feature-1
+  const testPRNumber = 10; // Replace with the actual PR number for feature-1
 
   const testData = {
   score: 75, // < 80 so it becomes a COMMENT instead of APPROVE

@@ -1,40 +1,90 @@
 const PullRequest = require("../models/PullRequest");
 const { fetchDiff } = require("../utils/fetchDiff");
+const githubService = require("../services/githubService");
 const axios = require("axios");
 
-// @desc    Create a new PR entry
+// @desc    Create a new PR entry (triggered by webhook or manual call)
 // @route   POST /api/prs
 // @access  Protected
 const createPR = async (req, res, next) => {
   try {
     const { repoName, prNumber, title, author } = req.body;
 
+    // Validate required fields
+    if (!repoName || !prNumber) {
+      return res.status(400).json({ error: "repoName and prNumber are required" });
+    }
+
+    // 1. Fetch PR details from GitHub
+    let prDetails = {};
+    try {
+      prDetails = await githubService.getPRDetails(repoName, prNumber);
+    } catch (err) {
+      console.error("⚠️ Could not fetch PR details from GitHub:", err.message);
+      // Fallback defaults if API fails
+      prDetails = {
+        title,
+        user: { login: author },
+        state: "open",
+        diff_url: `https://github.com/${repoName}/pull/${prNumber}.diff`,
+        html_url: `https://github.com/${repoName}/pull/${prNumber}`,
+      };
+    }
+
+    // 2. Create PR entry in DB with required fields
     const pr = await PullRequest.create({
       repoName,
       prNumber,
-      title,
-      author,
+      title: prDetails.title || title,
+      author: prDetails.user?.login || author,
+      status: prDetails.state || "open",
+      diffUrl: prDetails.diff_url,   // ✅ required
+      htmlUrl: prDetails.html_url,   // ✅ required
+      action: "opened",              // ✅ required (adjust with webhook if needed)
     });
 
+    // 3. Fetch actual diff from GitHub
+    let diffText = "";
+    try {
+      diffText = await fetchDiff(repoName, prNumber);
+      pr.diffCached = diffText;
+    } catch (diffErr) {
+      console.error("⚠️ Could not fetch diff:", diffErr.message);
+    }
+
+    // 4. Send diff to AI service
+    let analysis = null;
     try {
       const response = await axios.post("http://localhost:8000/analyze", {
         repo_name: repoName,
         pr_number: prNumber,
-        diff: "sample diff for now" // ✅ later we will use actual diff
+        diff: diffText,
       });
-
-      // Step 3: Save AI analysis into PR
-      pr.analysis = response.data;
-      await pr.save();
+      analysis = response.data;
+      pr.analysis = analysis;
+      pr.analysisStatus = "analyzed";
     } catch (aiError) {
       console.error("⚠️ AI Service Error:", aiError.message);
     }
-    
+
+    // 5. Save PR + AI results in MongoDB
+    await pr.save();
+
+    // 6. Post AI review back to GitHub
+    try {
+      if (analysis) {
+        await githubService.postReviewComment(repoName, prNumber, analysis);
+      }
+    } catch (ghError) {
+      console.error("⚠️ GitHub review post failed:", ghError.message);
+    }
+
     res.status(201).json(pr);
   } catch (err) {
     next(err);
   }
 };
+
 
 // @desc    Get all PRs
 // @route   GET /api/prs
@@ -48,7 +98,7 @@ const getPRs = async (req, res, next) => {
   }
 };
 
-// @desc    Get diff for a specific PR by prNumber + analyze with AI service
+// @desc    Get diff + AI analysis for a PR
 // @route   GET /api/prs/:prNumber/diff
 // @access  Protected
 const getPRDiff = async (req, res, next) => {
@@ -58,16 +108,15 @@ const getPRDiff = async (req, res, next) => {
       return res.status(404).json({ error: "PR not found" });
     }
 
-    const diffText = pr.diffCached || await fetchDiff(pr.repoName, pr.prNumber);
-
+    const diffText = pr.diffCached || (await fetchDiff(pr.repoName, pr.prNumber));
     if (!diffText || diffText.trim().length === 0) {
       return res.json({
         diff: null,
-        message: "ℹ️ This PR has no file changes."
+        message: "ℹ️ This PR has no file changes.",
       });
     }
 
-    // Call AI Service with proper payload
+    // Call AI Service
     let aiAnalysis = null;
     try {
       const aiResponse = await axios.post("http://localhost:8000/analyze", {
@@ -81,11 +130,11 @@ const getPRDiff = async (req, res, next) => {
       aiAnalysis = { error: "AI service unavailable" };
     }
 
-    // Save diff in MongoDB
+    // Save diff in DB
     pr.diffCached = diffText;
+    pr.analysis = aiAnalysis;
     await pr.save();
 
-    // ✅ Return both diff + AI analysis
     res.json({
       prNumber: pr.prNumber,
       repoName: pr.repoName,
@@ -97,30 +146,25 @@ const getPRDiff = async (req, res, next) => {
   }
 };
 
+// @desc    Get AI analysis by DB ID
+// @route   GET /api/prs/:id/analysis
+// @access  Protected
 const getPRDiffAnalysis = async (req, res, next) => {
   try {
     const pr = await PullRequest.findById(req.params.id);
     if (!pr) {
-      return res.status(404).json({ msg: "PR not found" });
+      return res.status(404).json({ error: "PR not found" });
     }
 
-    // Call AI service with the diff
-    const response = await axios.post("http://localhost:8000/analyze", {
-      repo_name: pr.repoName,
-      pr_number: pr.prNumber,
-      diff: pr.diff || "",
-    });
-
     res.json({
-      repo_name: pr.repoName,
-      pr_number: pr.prNumber,
-      summary: response.data.summary,
-      improvements: response.data.improvements,
-      risks: response.data.risks,
+      prNumber: pr.prNumber,
+      repoName: pr.repoName,
+      analysis: pr.analysis || null,
     });
   } catch (err) {
     next(err);
   }
 };
+
 
 module.exports = { createPR, getPRs, getPRDiff, getPRDiffAnalysis};

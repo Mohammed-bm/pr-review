@@ -1,4 +1,7 @@
 const axios = require("axios");
+const path = require("path");
+
+console.log("Using GitHub token:", process.env.GITHUB_TOKEN ? "Yes" : "No");
 
 class GitHubService {
   constructor() {
@@ -6,6 +9,7 @@ class GitHubService {
     this.token = process.env.GITHUB_TOKEN;
   }
 
+  // Fetch PR files from GitHub
   async getPRFiles(owner, repo, prNumber) {
     const url = `${this.baseURL}/repos/${owner}/${repo}/pulls/${prNumber}/files`;
     const response = await axios.get(url, {
@@ -14,87 +18,130 @@ class GitHubService {
         Accept: "application/vnd.github.v3+json",
       },
     });
-    return response.data; // array of changed files
+    return response.data;
   }
 
-  mapLineToPosition(files, comments) {
-    const mapped = [];
+  // Map AI comments to GitHub PR positions
+mapLineToPosition(files, comments) {
+  const mapped = [];
+  const generalComments = [];
 
-    for (const comment of comments) {
-      const file = files.find((f) => f.filename === comment.path);
-      if (!file || !file.patch) {
-        console.warn(`⚠️ Skipped comment: file not found or no patch for ${comment.path}`);
-        continue;
-      }
+  for (const comment of comments) {
+    if (!comment.body) continue;
 
-      const diffLines = file.patch.split("\n");
-      let position = null;
+    let file = files.find(f => f.filename === comment.path);
+    if (!file && comment.path) {
+      file = files.find(
+        f => path.basename(f.filename) === path.basename(comment.path) || f.filename.endsWith(comment.path)
+      );
+    }
 
-      // Walk through patch lines
-      let currentLine = 0;
-      for (let i = 0; i < diffLines.length; i++) {
-        const line = diffLines[i];
+    const filename = file ? file.filename : comment.path || "Unknown file";
 
-        if (line.startsWith("@@")) {
-          // Parse hunk header: @@ -a,b +c,d @@
-          const match = /@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
-          if (match) {
-            currentLine = parseInt(match[1], 10); // starting line number in new file
-          }
-          continue;
-        }
-
-        if (line.startsWith("+")) {
-          if (currentLine === comment.line) {
-            position = i + 1; // position is 1-based index in patch
-            break;
-          }
-          currentLine++;
-        } else if (!line.startsWith("-")) {
-          currentLine++;
-        }
-      }
-
-      if (position) {
-        mapped.push({
-          path: comment.path,
-          position,
-          body: `🤖 **AI Suggestion:** ${comment.body}`,
-        });
-        console.log(`✅ Mapped comment for ${comment.path} line ${comment.line} → position ${position}`);
+    // Force AI to pick a line: if null, use first hunk line
+    let lineNumber = comment.line;
+    if (lineNumber === null || lineNumber === undefined) {
+      if (file && file.patch) {
+        const firstHunk = file.patch.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+        lineNumber = firstHunk ? parseInt(firstHunk[1], 10) : 1;
       } else {
-        console.warn(
-          `⚠️ Skipped comment: Could not map line ${comment.line} in ${comment.path}`
-        );
+        lineNumber = null; // fallback to general
       }
     }
 
-    return mapped;
+    if (lineNumber === null || !file || !file.patch) {
+      generalComments.push({
+        path: filename,
+        body: `📌 [General Comment on ${filename}] ${comment.body}`
+      });
+      console.log(`⚡ General comment added for ${filename}`);
+      continue;
+    }
+
+    // Map line to GitHub position
+    const diffLines = file.patch.split("\n");
+    let position = null;
+    let currentLine = 0;
+
+    for (let i = 0; i < diffLines.length; i++) {
+      const line = diffLines[i];
+      if (line.startsWith("@@")) {
+        const match = /@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+        if (match) currentLine = parseInt(match[1], 10);
+        continue;
+      }
+
+      if (line.startsWith("+")) {
+        if (currentLine === lineNumber) {
+          position = i + 1;
+          break;
+        }
+        currentLine++;
+      } else if (!line.startsWith("-")) {
+        currentLine++;
+      }
+    }
+
+    if (position) {
+      mapped.push({
+        path: filename,
+        position,
+        body: `🤖 **AI Suggestion:** ${comment.body}`
+      });
+      console.log(`✅ Mapped comment for ${filename} line ${lineNumber} → position ${position}`);
+    } else {
+      generalComments.push({
+        path: filename,
+        body: `📌 [General Comment on ${filename}] ${comment.body}`
+      });
+      console.log(`⚡ General comment (position not found) added for ${filename}`);
+    }
   }
 
-  async postReviewComment(repo, prNumber, reviewData) {
+  return { inlineComments: mapped, generalComments };
+}
+
+
+
+  // Post review to GitHub
+async postReviewComment(repo, prNumber, reviewData) {
   try {
     const [owner, repoName] = repo.split("/");
 
+    // Determine review event based on score
     let event = "COMMENT";
     if (reviewData.score < 50) event = "REQUEST_CHANGES";
     else if (reviewData.score >= 80) event = "APPROVE";
 
-    // 🔑 Fetch PR files
+    // Fetch PR files
     const files = await this.getPRFiles(owner, repoName, prNumber);
-
-    // 📝 Log exact filenames from GitHub PR
     console.log("📄 PR files:", files.map(f => f.filename));
 
-    // Map AI comments to positions
-    const inlineComments = this.mapLineToPosition(files, reviewData.comments);
+    // Normalize comment paths
+    const normalizedComments = reviewData.comments.map(comment => {
+      const match = files.find(f => f.filename.endsWith(comment.path));
+      if (match) comment.path = match.filename;
+      return comment;
+    });
 
+    // Map comments to positions with fallback/general comments
+    const { inlineComments, generalComments } = this.mapLineToPosition(files, normalizedComments);
+
+    // Include general comments in the main review body
+    let reviewBody = this.formatReviewBody(reviewData);
+    if (generalComments.length > 0) {
+      const generalText = generalComments.map(c => `- ${c.body}`).join("\n");
+      reviewBody += `\n\n### ⚡ General Comments:\n${generalText}`;
+    }
+
+    // Prepare payload for GitHub API
     const reviewPayload = {
-      body: this.formatReviewBody(reviewData),
+      body: reviewBody,
       event,
       comments: inlineComments,
     };
 
+    // Post review to GitHub
     const response = await axios.post(
       `${this.baseURL}/repos/${owner}/${repoName}/pulls/${prNumber}/reviews`,
       reviewPayload,
@@ -109,17 +156,15 @@ class GitHubService {
 
     console.log(`✅ Review posted to PR #${prNumber} with event: ${event}`);
     return response.data;
+
   } catch (error) {
-    console.error(
-      "❌ Failed to post review to GitHub:",
-      error.response?.data || error.message
-    );
+    console.error("❌ Failed to post review to GitHub:", error.response?.data || error.message);
     throw error;
   }
 }
 
 
-
+  // Format GitHub review body
   formatReviewBody(reviewData) {
     return `## 🤖 AI Code Review Summary
 
@@ -129,7 +174,7 @@ ${reviewData.summary}
 
 ### 📊 Category Scores:
 - ✅ **Lint & Style**: ${reviewData.categories.lint}/100
-- 🐛 **Bug Detection**: ${reviewData.categories.bugs}/100  
+- 🐛 **Bug Detection**: ${reviewData.categories.bugs}/100
 - 🔒 **Security**: ${reviewData.categories.security}/100
 - ⚡ **Performance**: ${reviewData.categories.performance}/100
 
