@@ -1,5 +1,6 @@
   const express = require("express");
   const dotenv = require("dotenv");
+  const cors = require("cors");
   const connectDB = require("./config/db");
   const authRoutes = require("./routes/authRoutes");
   const webhookRoutes = require("./routes/webhookRoutes");
@@ -13,6 +14,12 @@ require('dotenv').config();
 
   const app = express();
   app.use(express.json()); // parse JSON requests
+
+  app.use(cors({
+  origin: "http://localhost:5173", // frontend dev server
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 
   // Routes
   app.use("/api/auth", authRoutes);
