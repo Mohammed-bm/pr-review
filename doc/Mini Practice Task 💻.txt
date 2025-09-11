@@ -1,0 +1,19 @@
+Mini Practice Task 💻
+
+Create a Student class:
+
+Properties: name, grade, marks (default = empty array)
+
+Methods:
+
+addMark(mark) → adds a mark
+
+getAverage() → returns the student's average marks
+
+info() → logs: "Student Mahfooz has an average of 85"
+
+Create two students and test the methods.
+
+Practice exercises: 
+• Create a simple app that fetches data from a public API 
+• Build a form with validation using vanilla JavaScript

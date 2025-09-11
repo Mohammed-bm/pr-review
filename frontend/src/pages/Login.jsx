@@ -12,16 +12,17 @@ export default function Login() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const data = await loginUser(formData);
-      // Save JWT token in localStorage
-      localStorage.setItem("token", data.token);
-      navigate("/");
-    } catch (err) {
-      setError("Invalid credentials");
-    }
-  };
+  e.preventDefault();
+  try {
+    const data = await loginUser(formData);
+    localStorage.setItem("token", data.token);
+    navigate("/");
+  } catch (err) {
+    console.error("Login error:", err);
+    setError(err.msg || "Login failed");
+  }
+};
+
 
   return (
     <div className="p-6 max-w-sm mx-auto">
