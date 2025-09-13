@@ -22,8 +22,26 @@ export default function PRDetail() {
     fetchPR();
   }, [id]);
 
-  if (loading) return <p className="p-4">Loading PR details...</p>;
-  if (!pr) return <p className="p-4 text-red-500">PR not found</p>;
+if (loading) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
+      <div className="flex flex-col items-center">
+        {/* Spinner */}
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500 border-solid"></div>
+        {/* Text */}
+        <p className="mt-4 text-lg text-gray-200">Loading PR details...</p>
+      </div>
+    </div>
+  );
+}
+
+if (!pr) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
+      <p className="text-lg text-red-500">PR not found</p>
+    </div>
+  );
+}
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -56,6 +74,41 @@ export default function PRDetail() {
           {pr.diff ?? "No changes"}
         </pre>
       </div>
+
+   {/* Inline Comments Section */}
+<div className="mt-6">
+  <h2 className="text-xl font-semibold">💬 Inline Comments</h2>
+  {pr.analysis?.comments && pr.analysis.comments.length > 0 ? (
+    <ul className="mt-2 list-disc list-inside space-y-2">
+      {pr.analysis.comments.map((c, idx) => (
+        <li key={idx} className="bg-gray-100 p-2 rounded text-sm">
+          <strong>{c.path}:{c.line}</strong> — {c.body}
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="mt-2 text-gray-500">No inline comments.</p>
+  )}
+</div>
+
+{/* Fix Suggestions Section */}
+<div className="mt-6">
+  <h2 className="text-xl font-semibold">🛠 Fix Suggestions</h2>
+  {pr.analysis?.fix_suggestions && pr.analysis.fix_suggestions.length > 0 ? (
+    <div className="space-y-4 mt-2">
+      {pr.analysis.fix_suggestions.map((s, idx) => (
+        <div key={idx} className="bg-gray-900 text-green-200 p-4 rounded text-sm overflow-x-auto">
+          <p className="font-semibold mb-2">File: {s.path}</p>
+          <pre>{s.patch}</pre>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p className="mt-2 text-gray-500">No fix suggestions.</p>
+  )}
+</div>
+
+
     </div>
   );
 }

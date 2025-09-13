@@ -14,7 +14,7 @@ export const registerUser = async (userData) => {
     console.error("Registration error:", error.response?.data || error.message);
     throw error;
   }
-};
+}
 
 // Login user
 export const loginUser = async (userData) => {

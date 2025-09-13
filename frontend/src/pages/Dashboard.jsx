@@ -30,16 +30,16 @@ export default function Dashboard() {
   if (loading) return <p className="p-4">Loading PRs...</p>;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Pull Requests</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded"
-        >
-          Logout
-        </button>
-      </div>
+    <div className="p-6 min-h-screen">
+      {/* 🔹 Logout button fixed in top-right of viewport */}
+      <button
+        onClick={handleLogout}
+        className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-md hover:bg-red-600"
+      >
+        Logout
+      </button>
+
+      <h1 className="text-2xl font-bold mb-4">Pull Requests</h1>
 
       <table className="min-w-full border">
         <thead>

@@ -118,11 +118,22 @@ async postReviewComment(repo, prNumber, reviewData) {
     console.log("📄 PR files:", files.map(f => f.filename));
 
     // Normalize comment paths
-    const normalizedComments = reviewData.comments.map(comment => {
-      const match = files.find(f => f.filename.endsWith(comment.path));
-      if (match) comment.path = match.filename;
-      return comment;
-    });
+const normalizedComments = reviewData.comments.map(comment => {
+  let match = files.find(f => f.filename === comment.path);
+
+  // Fallback: if AI gave only the filename, try endsWith
+  if (!match) {
+    const base = comment.path.split("/").pop(); // get just filename
+    match = files.find(f => f.filename.endsWith(base));
+  }
+
+  if (match) {
+    comment.path = match.filename; // replace with full path
+  }
+
+  return comment;
+});
+
 
     // Map comments to positions with fallback/general comments
     const { inlineComments, generalComments } = this.mapLineToPosition(files, normalizedComments);
