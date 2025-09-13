@@ -15,14 +15,7 @@ require('dotenv').config();
   const app = express();
   app.use(express.json()); // parse JSON requests
 
-  app.use(cors({
-  origin: [
-    "http://localhost:5173",              // local dev
-    "https://pr-review-ten.vercel.app"    // Vercel deployed frontend
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+  app.use(cors({ origin: "*" }));
 
   // Routes
   app.use("/api/auth", authRoutes);
