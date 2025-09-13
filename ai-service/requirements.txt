@@ -5,3 +5,4 @@ langchain
 langgraph
 openai
 pydantic
+langchain-openai
