@@ -16,7 +16,10 @@ require('dotenv').config();
   app.use(express.json()); // parse JSON requests
 
   app.use(cors({
-  origin: "http://localhost:5173", // frontend dev server
+  origin: [
+    "http://localhost:5173",              // local dev
+    "https://pr-review-ten.vercel.app"    // Vercel deployed frontend
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
