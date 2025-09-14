@@ -1,8 +1,9 @@
 const axios = require('axios');
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
 
 const callAIService = async (repoName, prNumber, diff) => {
   try {
-    const response = await axios.post('http://localhost:8000/analyze', {
+    const response = await axios.post(`${AI_SERVICE_URL}/analyze`, {
       repo_name: repoName,
       pr_number: prNumber,
       diff: diff
