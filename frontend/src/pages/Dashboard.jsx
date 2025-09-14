@@ -13,19 +13,21 @@ export default function Dashboard() {
     navigate("/login");
   };
 
-  useEffect(() => {
-    const fetchPRs = async () => {
-      try {
-        const data = await getPRs();
-        setPrs(data);
-      } catch (err) {
-        console.error("Failed to fetch PRs:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPRs();
-  }, []);
+useEffect(() => {
+  const fetchPRs = async () => {
+    try {
+      const data = await getPRs();
+      console.log("🔍 Raw PRs data:", data); // debug
+      setPrs(Array.isArray(data) ? data : []); // ✅ ensure always an array
+    } catch (err) {
+      console.error("Failed to fetch PRs:", err);
+      setPrs([]); // ✅ still set to empty array
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchPRs();
+}, []);
 
   if (loading) return <p className="p-4">Loading PRs...</p>;
 
