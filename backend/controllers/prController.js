@@ -2,6 +2,7 @@ const PullRequest = require("../models/PullRequest");
 const { fetchDiff } = require("../utils/fetchDiff");
 const githubService = require("../services/githubService");
 const axios = require("axios");
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
 
 // @desc    Create a new PR entry (triggered by webhook or manual call)
 // @route   POST /api/prs
