@@ -55,7 +55,7 @@ const createPR = async (req, res, next) => {
     // 4. Send diff to AI service
     let analysis = null;
     try {
-      const response = await axios.post("http://localhost:8000/analyze", {
+      const response = await axios.post(`${AI_SERVICE_URL}/analyze`, {
         repo_name: repoName,
         pr_number: prNumber,
         diff: diffText,
@@ -119,7 +119,7 @@ const getPRDiff = async (req, res, next) => {
     // Call AI Service
     let aiAnalysis = null;
     try {
-      const aiResponse = await axios.post("http://localhost:8000/analyze", {
+      const aiResponse = await axios.post(`${AI_SERVICE_URL}/analyze`, {
         repo_name: pr.repoName,
         pr_number: pr.prNumber,
         diff: diffText,
