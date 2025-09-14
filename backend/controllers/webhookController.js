@@ -2,13 +2,14 @@ const PullRequest = require("../models/PullRequest");
 const { fetchDiff } = require("../utils/fetchDiff");
 const githubService = require("../services/githubService");
 const axios = require("axios");
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
 
 // Call AI Service
 const callAIService = async (repoName, prNumber, diff) => {
   try {
     console.log(`🤖 Calling AI service for PR #${prNumber}...`);
     const response = await axios.post(
-      "http://localhost:8000/analyze",
+      `${AI_SERVICE_URL}/analyze`,
       { repo_name: repoName, pr_number: prNumber, diff },
       { timeout: 30000 }
     );
