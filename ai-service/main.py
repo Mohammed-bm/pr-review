@@ -6,7 +6,7 @@ from langchain.schema import HumanMessage
 from langgraph.graph import StateGraph, END
 from typing import List, Dict, Any, TypedDict
 from dotenv import load_dotenv
-import os, json, asyncio
+import os, json, asyncio, re
 
 load_dotenv()
 
@@ -30,7 +30,11 @@ class FinalOutput(BaseModel):
 # --------------------
 # LLM Setup
 # --------------------
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+llm = ChatOpenAI(
+    model="gpt-4o-mini",   # lightweight, faster, cheaper
+    temperature=0,
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 # --------------------
 # Diff Validation Function
@@ -51,6 +55,17 @@ def validate_diff(diff: str) -> bool:
     
     return has_markers
 
+def extract_json(response_text: str) -> dict:
+    """Extract the first valid JSON block from the LLM response."""
+    try:
+        match = re.search(r"\{.*\}", response_text, re.S)  # grab {...} including multiline
+        if match:
+            return json.loads(match.group(0))
+    except Exception as e:
+        print(f"❌ JSON extract error: {e}")
+        print(f"Raw LLM output (truncated): {response_text[:200]}...")
+    return {"score": 0, "issues": ["Failed to parse analysis"]}
+
 # --------------------
 # Agent Definitions with Error Handling
 # --------------------
@@ -68,15 +83,11 @@ class LintAndStyleAgent:
             
             Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            response = await llm.agenerate([[HumanMessage(content=prompt)]])
-            response_text = response.generations[0][0].text
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            response_text = response.content
             
             # Try to parse JSON, return default if fails
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError:
-                print(f"❌ JSON parse error in Lint agent: {response_text}")
-                return {"score": 0, "issues": ["Failed to parse analysis"]}
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Lint agent error: {e}")
@@ -96,14 +107,10 @@ class BugDetectionAgent:
             
             Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            response = await llm.agenerate([[HumanMessage(content=prompt)]])
-            response_text = response.generations[0][0].text
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            response_text = response.content
             
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError:
-                print(f"❌ JSON parse error in Bug agent: {response_text}")
-                return {"score": 0, "issues": ["Failed to parse analysis"]}
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Bug agent error: {e}")
@@ -123,14 +130,10 @@ class SecurityScannerAgent:
             
             Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            response = await llm.agenerate([[HumanMessage(content=prompt)]])
-            response_text = response.generations[0][0].text
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            response_text = response.content
             
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError:
-                print(f"❌ JSON parse error in Security agent: {response_text}")
-                return {"score": 0, "issues": ["Failed to parse analysis"]}
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Security agent error: {e}")
@@ -150,14 +153,10 @@ class PerformanceReviewAgent:
             
             Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            response = await llm.agenerate([[HumanMessage(content=prompt)]])
-            response_text = response.generations[0][0].text
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            response_text = response.content
             
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError:
-                print(f"❌ JSON parse error in Performance agent: {response_text}")
-                return {"score": 0, "issues": ["Failed to parse analysis"]}
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Performance agent error: {e}")
@@ -200,12 +199,12 @@ class CoordinatorAgent:
               ]
             }}
             """
-            response = await llm.agenerate([[HumanMessage(content=prompt)]])
-            response_text = response.generations[0][0].text
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            response_text = response.content
             
             # Try to parse JSON, return default if fails
             try:
-                final_result = json.loads(response_text)
+                final_result = extract_json(response_text)
                 
                 # Convert all scores to integers
                 final_result = self._ensure_integer_scores(final_result)
