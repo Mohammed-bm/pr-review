@@ -1,222 +1,150 @@
-AI-Powered MERN Code Reviewer
-An automated code review system that analyzes GitHub Pull Requests using AI agents and provides feedback on code quality, bugs, security, and performance.
 
-🌟 Features
-Automated PR Reviews: Automatically reviews GitHub Pull Requests via webhooks
+# 🧱 PR- Review
 
-Multi-Agent AI Analysis: Uses specialized AI agents for different code quality dimensions
+> **An AI-powered system to automatically review GitHub Pull Requests (PRs) in MERN projects.**  
+> Automatically analyzes PRs for lint, bugs, security issues, and performance improvements, then posts actionable feedback back to GitHub.
 
-GitHub Integration: Directly posts review comments to PRs
+---
 
-Dashboard: React-based interface to view review history and details
+## 🚀 Project Overview
 
-JWT Authentication: Secure access to the review dashboard
+This project is a **Proof of Work** demonstrating a full-stack application that automates code reviews for GitHub PRs using multi-agent AI.  
+It helps developers improve code quality faster by providing automated feedback directly on GitHub.  
+Designed with simplicity and scalability in mind, this project is built with Node.js, Python (FastAPI), React.js, and MongoDB.
 
-🏗️ Architecture
-The system consists of three main components:
+---
 
-Node.js Backend: Handles GitHub webhooks, communicates with GitHub API, and serves the React frontend
+## 🎯 Key Features
 
-Python AI Service: Processes code using multiple AI agents for different analysis types
+- ✅ Secure JWT Authentication for Dashboard login  
+- ✅ GitHub Webhook listens for PR events  
+- ✅ AI-powered analysis: Lint, Bugs, Security, Performance  
+- ✅ Posts AI-generated review comments back to GitHub PR  
+- ✅ Beautiful React Dashboard for reviewing PR history  
+- ✅ Future improvements: GitHub OAuth, horizontal scaling, advanced caching
 
-React Frontend: Dashboard for viewing review history and details
+---
 
-Diagram
-Code
+## ⚙️ Setup & Installation
 
-![Architecture Diagram](images/architecture_img.png)
-
-🛠️ Technology Stack
-Backend: Node.js, Express, MongoDB, Mongoose, JWT
-
-AI Service: Python, FastAPI, LangChain, LangGraph
-
-Frontend: React, React Router, Axios
-
-Database: MongoDB
-
-Authentication: JWT with bcrypt password hashing
-
-📁 Project Structure
-text
-pr-review/
-├── backend/                 # Node.js Express server
-│   ├── models/             # MongoDB models (User, Review)
-│   ├── routes/             # API routes (auth, webhooks, reviews)
-│   ├── services/           # GitHub service, AI service client
-│   └── middleware/         # Auth, validation, error handling
-├── ai-service/             # Python FastAPI service
-│   ├── agents/             # AI agents (lint, bug, security, performance)
-│   ├── models/             # Pydantic models
-│   └── main.py             # FastAPI application
-├── frontend/               # React application
-│   ├── src/
-│   │   ├── components/     # Reusable components
-│   │   ├── pages/         # Main pages (Login, Dashboard, ReviewDetail)
-│   │   └── services/      # API calls
-│   └── public/
-└── docker-compose.yml      # Multi-container setup
-🚀 Quick Start
-Prerequisites
-Node.js (v16 or higher)
-
-Python (v3.8 or higher)
-
-MongoDB (local or Atlas)
-
-GitHub Personal Access Token
-
-OpenAI API key (or other LLM provider)
-
-Installation
-Clone the repository
-
-bash
-git clone https://github.com/Mohammed-bm/pr-review.git
+### 1️⃣ Clone the Repo  
+```bash
+git clone https://github.com/your-/Mohammed-bm/pr-review.git
 cd pr-review
-Setup Backend
+```
 
-bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env with your configuration
-Setup AI Service
+### 2️⃣ Environment Variables  
+Create `.env` files in each folder (`backend/`, `ai-service/`, `frontend/`) using this template:  
 
-bash
-cd ../ai-service
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your configuration
-Setup Frontend
+#### Example: `backend/.env`  
+```env
+PORT=5000  
+MONGO_URI=[YOUR_MONGO_URI]  
+JWT_SECRET=[YOUR_JWT_SECRET]  
+GITHUB_WEBHOOK_SECRET=[YOUR_SECRET]  
+GITHUB_TOKEN=[YOUR_GITHUB_PERSONAL_ACCESS_TOKEN]  
+VITE_API_URL=http://localhost:5000/api  
+```
 
-bash
-cd ../frontend
-npm install
-cp .env.example .env
-# Edit .env with your configuration
-Run with Docker (Alternative)
+#### Example: `ai-services/.env`  
+```env
+OPENAI_API_KEY=[YOUR_OPENAI_API_KEY]  
+```
 
-bash
-docker-compose up -d
-Environment Variables
-Backend (.env):
+#### Example: `frontend/.env`  
+```env
+VITE_API_URL=http://localhost:5000  
+```
 
-env
-NODE_ENV=development
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/pr-review
-JWT_SECRET=your_jwt_secret
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-GITHUB_ACCESS_TOKEN=your_github_token
-AI_SERVICE_URL=http://localhost:8000
-AI Service (.env):
+### 3️⃣ Run Each Service (In Separate Terminals)
 
-env
-OPENAI_API_KEY=your_openai_api_key
-Frontend (.env):
+#### Backend (Node.js)  
+```bash
+cd backend  
+npm install  
+npm run dev  
+```
 
-env
-REACT_APP_API_URL=http://localhost:5000
-📋 API Endpoints
-Backend API
-POST /api/auth/register - User registration
+#### AI Service (Python + FastAPI)  
+```bash
+cd ai-services  
+pip install -r requirements.txt  
+uvicorn main:app --reload  
+```
 
-POST /api/auth/login - User login
+#### Frontend (React.js)  
+```bash
+cd frontend  
+npm install  
+npm run dev  
+```
 
-GET /api/reviews - Get user's reviews (protected)
+---
 
-GET /api/reviews/:id - Get specific review (protected)
+## 📚 Usage Flow
 
-POST /webhooks/github - GitHub webhook endpoint
+1. GitHub PR →  
+2. Webhook →  
+3. Node Backend validates & saves PR metadata →  
+4. Sends PR diff to Python AI Service →  
+5. Receives analysis result →  
+6. Posts review comments back to GitHub PR →  
+7. Displays history & detail in React Dashboard
 
-AI Service API
-POST /analyze - Analyze code and return review
+---
 
-🔧 Webhook Configuration
-Go to your GitHub repository Settings → Webhooks
+## 🌐 Deployment
 
-Add a new webhook with:
+Currently deployed on Render (Backend + AI) and Vercel (Frontend).  
+Placeholders:  
+- Backend URL → (https://pr-review-backend.onrender.com/)  
+- AI Service URL → (https://pr-review-ai-nmkg.onrender.com/)  
+- Frontend URL → (https://pr-review-jykpp6mfd-mohammeds-projects-619be64e.vercel.app/login)
 
-Payload URL: https://yourdomain.com/webhooks/github
+---
 
-Content type: application/json
+## 📸 Sample Screenshots 
 
-Secret: Your GITHUB_WEBHOOK_SECRET
+> ![Login page ](images/Screenshot 2025-09-13 135257.png) 
+- Screenshot: Login 
 
-Events: Select "Pull requests"
+> ![Dashboard ](images/Screenshot 2025-09-13 135239.png) 
+- Screenshot: Dashboard listing PR reviews with score breakdown
 
-🧪 Testing
-Backend Tests
+> ![PR-review ](images/Screenshot 2025-09-13 135225.png) 
+- Screenshot: GitHub PR with AI-generated review
 
-bash
-cd backend
-npm test
-AI Service Tests
+> ![PR-reiw comment ](images/Screenshot 2025-09-13 135344.png) 
+- Screenshot: GitHub PR with AI-generated review comments 
 
-bash
-cd ai-service
-pytest
-Manual Testing with ngrok
+---
 
-bash
-ngrok http 5000
-# Use the ngrok URL for webhook testing
-📊 Dashboard Usage
-Register/Login to the React dashboard
+## 🏗️ Architecture Overview
 
-View all your PR reviews with scores and summaries
+This project has a simple but powerful architecture designed to automate GitHub PR reviews in an easy-to-understand flow, even for beginners.  
+Here’s a brief explanation of how it works:
 
-Click on any review to see detailed feedback including:
+1. **GitHub sends a Pull Request event** to the Webhook endpoint in the Node.js backend.  
+2. The backend verifies the event using HMAC SHA-256 signature and stores the PR metadata in MongoDB.  
+3. The PR diff files are sent from the Node backend to the Python AI Service (FastAPI).  
+4. The AI Service uses LangChain + LangGraph agents to analyze the PR for lint, bugs, security risks, and performance suggestions.  
+5. The structured JSON result is returned to the Node backend.  
+6. The backend posts the review comments and summary back to the GitHub PR using the GitHub API.  
+7. Meanwhile, all PR reviews are saved in MongoDB and displayed in a React Dashboard with an intuitive UI.
 
-Category scores (Lint, Bugs, Security, Performance)
+### 📊 Architecture Diagram
 
-Inline comments with code suggestions
+> ![Architecture Diagram ](images/architecture diagram.png)  
 
-Fix suggestions with patches
+---
 
-🚢 Deployment
-Backend Deployment (Railway/Render)
-Connect your repository to Railway/Render
+## 📜 License
 
-Set environment variables
+MIT License © 2025
 
-Deploy automatically
+---
 
-AI Service Deployment (Railway/Google Cloud Run)
-Connect your AI service directory
+## ✅ Note
 
-Set environment variables
-
-Deploy
-
-Frontend Deployment (Vercel/Netlify)
-Connect your frontend directory
-
-Set REACT_APP_API_URL to your deployed backend URL
-
-Deploy
-
-MongoDB Deployment (MongoDB Atlas)
-Create a free cluster on MongoDB Atlas
-
-Get connection string
-
-Update MONGODB_URI in your backend environment variables
-
-🤝 Contributing
-Fork the repository
-
-Create a feature branch
-
-Commit your changes
-
-Push to the branch
-
-Open a Pull Request
-
-📝 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-🆘 Support
-If you have any questions or issues, please open an issue on GitHub or contact the maintainers.
+This project is primarily built as proof of work.  
+Advanced features like GitHub OAuth, horizontal scaling, and caching are planned for future releases.
