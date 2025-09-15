@@ -134,7 +134,7 @@ Here’s a brief explanation of how it works:
 
 ### 📊 Architecture Diagram
 
-> ![Architecture Diagram ](images/architecture diagram.png)  
+> ![Architecture Diagram ](images/architecturediagram.png)  
 
 ---
 
