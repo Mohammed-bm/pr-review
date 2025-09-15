@@ -105,16 +105,16 @@ Placeholders:
 
 ## 📸 Sample Screenshots 
 
-> ![Login page ](images/Screenshot 2025-09-13 135257.png) 
+> ![Login page ](images/login.png) 
 - Screenshot: Login 
 
-> ![Dashboard ](images/Screenshot 2025-09-13 135239.png) 
+> ![Dashboard ](images/prlist.png) 
 - Screenshot: Dashboard listing PR reviews with score breakdown
 
-> ![PR-review ](images/Screenshot 2025-09-13 135225.png) 
+> ![PR-review ](images/reviewpr.png) 
 - Screenshot: GitHub PR with AI-generated review
 
-> ![PR-reiw comment ](images/Screenshot 2025-09-13 135344.png) 
+> ![PR-reiw comment ](images/reviewprcomment.png) 
 - Screenshot: GitHub PR with AI-generated review comments 
 
 ---
