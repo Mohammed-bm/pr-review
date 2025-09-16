@@ -1,8 +1,8 @@
 
 # 🧱 PR- Review
 
-> **An AI-powered system to automatically review GitHub Pull Requests (PRs) in MERN projects.**  
-> Automatically analyzes PRs for lint, bugs, security issues, and performance improvements, then posts actionable feedback back to GitHub.
+**An AI-powered system to automatically review GitHub Pull Requests (PRs) in MERN projects.**  
+Automatically analyzes PRs for lint, bugs, security issues, and performance improvements, then posts actionable feedback back to GitHub.
 
 ---
 
@@ -105,16 +105,16 @@ Placeholders:
 
 ## 📸 Sample Screenshots 
 
-> ![Login page ](images/login.png) 
+![Login page ](images/login.png) 
 - Screenshot: Login 
 
-> ![Dashboard ](images/prlist.png) 
+![Dashboard ](images/prlist.png) 
 - Screenshot: Dashboard listing PR reviews with score breakdown
 
-> ![PR-review ](images/reviewpr.png) 
+![PR-review ](images/reviewpr.png) 
 - Screenshot: GitHub PR with AI-generated review
 
-> ![PR-reiw comment ](images/reviewprcomment.png) 
+![PR-reiw comment ](images/reviewprcomment.png) 
 - Screenshot: GitHub PR with AI-generated review comments 
 
 ---
@@ -134,7 +134,7 @@ Here’s a brief explanation of how it works:
 
 ### 📊 Architecture Diagram
 
-> ![Architecture Diagram ](images/architecturediagram.png)  
+![Architecture Diagram ](images/architecturediagram.png)  
 
 ---
 
