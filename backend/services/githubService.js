@@ -101,9 +101,7 @@ mapLineToPosition(files, comments) {
   return { inlineComments: mapped, generalComments };
 }
 
-
-
-  // Post review to GitHub
+// Post review to GitHub
 async postReviewComment(repo, prNumber, reviewData) {
   try {
     const [owner, repoName] = repo.split("/");
@@ -118,39 +116,36 @@ async postReviewComment(repo, prNumber, reviewData) {
     console.log("📄 PR files:", files.map(f => f.filename));
 
     // Normalize comment paths
-const normalizedComments = reviewData.comments.map(comment => {
-  let match = files.find(f => f.filename === comment.path);
+    const normalizedComments = reviewData.comments.map(comment => {
+      let match = files.find(f => f.filename === comment.path);
+      if (!match) {
+        const base = comment.path.split("/").pop(); // get just filename
+        match = files.find(f => f.filename.endsWith(base));
+      }
+      if (match) comment.path = match.filename;
+      return comment;
+    });
 
-  // Fallback: if AI gave only the filename, try endsWith
-  if (!match) {
-    const base = comment.path.split("/").pop(); // get just filename
-    match = files.find(f => f.filename.endsWith(base));
-  }
-
-  if (match) {
-    comment.path = match.filename; // replace with full path
-  }
-
-  return comment;
-});
-
-
-    // Map comments to positions with fallback/general comments
+    // Map comments to positions
     const { inlineComments, generalComments } = this.mapLineToPosition(files, normalizedComments);
 
-    // Include general comments in the main review body
+    // Build review body
     let reviewBody = this.formatReviewBody(reviewData);
     if (generalComments.length > 0) {
       const generalText = generalComments.map(c => `- ${c.body}`).join("\n");
       reviewBody += `\n\n### ⚡ General Comments:\n${generalText}`;
     }
 
-    // Prepare payload for GitHub API
+    // Prepare payload
     const reviewPayload = {
       body: reviewBody,
       event,
       comments: inlineComments,
     };
+
+    // 🔎 DEBUG LOGGING
+    console.log("🚀 Sending review payload to GitHub:");
+    console.dir(reviewPayload, { depth: null });
 
     // Post review to GitHub
     const response = await axios.post(
@@ -165,15 +160,26 @@ const normalizedComments = reviewData.comments.map(comment => {
       }
     );
 
+    // 🔎 DEBUG RESPONSE
+    console.log("✅ GitHub review response:");
+    console.dir(response.data, { depth: null });
+
     console.log(`✅ Review posted to PR #${prNumber} with event: ${event}`);
     return response.data;
 
   } catch (error) {
-    console.error("❌ Failed to post review to GitHub:", error.response?.data || error.message);
+    // 🔎 FULL ERROR LOGGING
+    console.error("❌ Failed to post review to GitHub:");
+    if (error.response) {
+      console.error("Status:", error.response.status);
+      console.error("Headers:", error.response.headers);
+      console.error("Data:", error.response.data);
+    } else {
+      console.error("Message:", error.message);
+    }
     throw error;
   }
 }
-
 
   // Format GitHub review body
   formatReviewBody(reviewData) {
