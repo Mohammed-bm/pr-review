@@ -332,9 +332,8 @@ review_graph = create_review_graph()
 @app.post("/analyze", response_model=FinalOutput)
 async def analyze_diff(data: DiffInput):
     try:
-        # Validate the diff before processing
+        # ✅ 1. Validate diff early
         if not validate_diff(data.diff):
-            # Return a default response for empty/invalid diffs
             return {
                 "score": 0,
                 "categories": {
@@ -348,21 +347,41 @@ async def analyze_diff(data: DiffInput):
                 "fix_suggestions": []
             }
 
-        # Execute the graph with initial state
-        initial_state = {
-            "diff": data.diff,
-            "lint_result": {},
-            "bug_result": {},
-            "security_result": {},
-            "performance_result": {},
-            "final_result": {}
-        }
-        
-        results = await review_graph.ainvoke(initial_state)
-        
-        # Return the final result
-        return results["final_result"]
-        
+        diff = data.diff
+
+        # ✅ 2. Create agents
+        lint_agent = LintAndStyleAgent()
+        bug_agent = BugDetectionAgent()
+        security_agent = SecurityScannerAgent()
+        performance_agent = PerformanceReviewAgent()
+
+        # ✅ 3. Semaphore to prevent 429 (limit concurrent LLM calls)
+        semaphore = asyncio.Semaphore(2)
+
+        async def safe_analyze(agent, diff):
+            async with semaphore:
+                return await agent.analyze(diff)
+
+        # ✅ 4. Run all 4 agents in parallel
+        lint_result, bug_result, security_result, performance_result = await asyncio.gather(
+            safe_analyze(lint_agent, diff),
+            safe_analyze(bug_agent, diff),
+            safe_analyze(security_agent, diff),
+            safe_analyze(performance_agent, diff)
+        )
+
+        # ✅ 5. Coordinate results (final aggregation)
+        coordinator = CoordinatorAgent()
+        final_result = await coordinator.coordinate({
+            "lint": lint_result,
+            "bugs": bug_result,
+            "security": security_result,
+            "performance": performance_result
+        })
+
+        # ✅ 6. Return final result to backend
+        return final_result
+
     except Exception as e:
         print(f"❌ Critical error in analyze_diff: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
