@@ -105,11 +105,14 @@ const getPRs = async (req, res, next) => {
 const getPRDiff = async (req, res, next) => {
   try {
     const pr = await PullRequest.findOne({ prNumber: req.params.prNumber });
+
     if (!pr) {
       return res.status(404).json({ error: "PR not found" });
     }
 
-    const diffText = pr.diffCached || (await fetchDiff(pr.repoName, pr.prNumber));
+    // ✅ 1. Use cached diff if available, otherwise fetch from GitHub
+    const diffText = pr.diff || (await fetchDiff(pr.repoName, pr.prNumber));
+
     if (!diffText || diffText.trim().length === 0) {
       return res.json({
         diff: null,
@@ -117,31 +120,62 @@ const getPRDiff = async (req, res, next) => {
       });
     }
 
-    // Call AI Service
+    // ✅ 2. Check if AI analysis already exists in DB
+    if (pr.analysisStatus === "analyzed" && pr.summary && pr.score) {
+      console.log(`✅ Returning cached analysis for PR #${pr.prNumber}`);
+      return res.json({
+        prNumber: pr.prNumber,
+        repoName: pr.repoName,
+        diff: diffText,
+        analysis: {
+          score: pr.score,
+          categories: pr.categories,
+          summary: pr.summary,
+          comments: pr.comments,
+          fixSuggestions: pr.fixSuggestions
+        },
+        cached: true
+      });
+    }
+
+    // ✅ 3. Only call AI if no previous analysis exists
+    console.log(`🤖 No existing analysis for PR #${pr.prNumber}, calling AI...`);
     let aiAnalysis = null;
+
     try {
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/analyze`, {
         repo_name: pr.repoName,
         pr_number: pr.prNumber,
         diff: diffText,
       });
+
       aiAnalysis = aiResponse.data;
+
+      // ✅ 4. Save new analysis to DB
+      pr.diff = diffText;
+      pr.score = aiAnalysis.score;
+      pr.categories = aiAnalysis.categories;
+      pr.summary = aiAnalysis.summary;
+      pr.comments = aiAnalysis.comments;
+      pr.fixSuggestions = aiAnalysis.fix_suggestions;
+      pr.analysisStatus = "analyzed";
+      pr.analyzedAt = new Date();
+
+      await pr.save();
+
     } catch (error) {
       console.error("❌ AI service call failed:", error.message);
-      aiAnalysis = { error: "AI service unavailable" };
+      return res.status(500).json({ error: "AI analysis failed" });
     }
-
-    // Save diff in DB
-    pr.diffCached = diffText;
-    pr.analysis = aiAnalysis;
-    await pr.save();
 
     res.json({
       prNumber: pr.prNumber,
       repoName: pr.repoName,
       diff: diffText,
       analysis: aiAnalysis,
+      cached: false
     });
+
   } catch (err) {
     next(err);
   }
