@@ -5,6 +5,7 @@ import { loginUser } from "../api/auth";
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -14,67 +15,128 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
+
     try {
       const data = await loginUser(formData);
       localStorage.setItem("token", data.token);
       navigate("/");
     } catch (err) {
       setError("Invalid email or password");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-  <main className="flex min-h-screen items-center justify-center bg-gray-900 text-white px-4 text-center">
-    <section className="w-full max-w-md p-8 bg-gray-800 rounded shadow-lg">
-        <h1 className="text-3xl font-bold text-center mb-4">Welcome to CodeSage</h1>
-        <p className="text-center text-gray-300 mb-6">Login to your Dashboard</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--bg-primary)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        fontFamily:
+          "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+      }}
+    >
+      <div className="register-container">
+        {/* Header */}
+        <div className="register-header">
+          <h1 className="register-title">Welcome Back</h1>
+          <p className="register-subtitle">
+            Sign in to your AI Code Review Dashboard
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm text-gray-300">Email Address</label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="register-form">
+          {/* Email Field */}
+          <div className="reg-form-group">
+            <label className="reg-form-label">Email Address</label>
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
+              placeholder="you@example.com"
               required
-              className="mt-1 w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring focus:ring-blue-500"
+              className="reg-form-input"
             />
+            <span className="input-icon">✉️</span>
           </div>
 
-          <div>
-            <label className="block text-sm text-gray-300">Password</label>
+          {/* Password Field */}
+          <div className="reg-form-group">
+            <label className="reg-form-label">Password</label>
             <input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
+              placeholder="••••••••"
               required
-              className="mt-1 w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring focus:ring-blue-500"
+              className="reg-form-input"
             />
+            <span className="input-icon">🔒</span>
           </div>
 
-          <p className="text-sm text-gray-400">
-            Example: test@example.com, password: password123
-          </p>
+          {/* Demo Hint */}
+          <div className="demo-box">
+            <strong>Demo:</strong> test@example.com / password123
+          </div>
 
-          {error && <p className="text-red-500 text-center">{error}</p>}
+          {/* Error Message */}
+          {error && <div className="error-box">{error}</div>}
 
-          <button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded"
-          >
-            Login
+          {/* Login Button */}
+          <button type="submit" className="register-button" disabled={loading}>
+            {loading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "16px",
+                    height: "16px",
+                    border: "2px solid transparent",
+                    borderTop: "2px solid white",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                  }}
+                ></div>
+                Signing in...
+              </div>
+            ) : (
+              "Login"
+            )}
           </button>
         </form>
 
-        <p className="text-sm text-gray-400 mt-6 text-center">
-          Don’t have an account?{" "}
-          <Link to="/register" className="text-blue-400 hover:underline">
-            Register
-          </Link>
-        </p>
-      </section>
-    </main>
+        {/* Footer */}
+        <div className="register-footer">
+          <p className="register-footer-text">
+            Don’t have an account?{" "}
+            <Link to="/register" className="login-link">
+              Register here
+            </Link>
+          </p>
+        </div>
+      </div>
+
+      {/* Spinner Animation */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
   );
 }

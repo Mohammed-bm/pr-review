@@ -1,10 +1,9 @@
-// src/pages/PRDetail.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getPRDiff } from "../api/pr";
 
 export default function PRDetail() {
-  const { id } = useParams(); // matches :id in App.jsx
+  const { id } = useParams();
   const [pr, setPr] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -12,6 +11,7 @@ export default function PRDetail() {
     const fetchPR = async () => {
       try {
         const data = await getPRDiff(id);
+        console.log("🔍 PR Detail Data:", data); // Debug log to see actual API response
         setPr(data);
       } catch (err) {
         console.error("❌ Error fetching PR detail:", err);
@@ -22,93 +22,195 @@ export default function PRDetail() {
     fetchPR();
   }, [id]);
 
-if (loading) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
-      <div className="flex flex-col items-center">
-        {/* Spinner */}
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500 border-solid"></div>
-        {/* Text */}
-        <p className="mt-4 text-lg text-gray-200">Loading PR details...</p>
+  if (loading) {
+    return (
+      <div className="dashboard-loading">
+        <div className="spinner"></div>
+        <p>Loading PR details...</p>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-if (!pr) {
+  if (!pr) {
+    return (
+      <div className="dashboard-loading">
+        <p className="text-red-400">PR not found</p>
+      </div>
+    );
+  }
+
+  // Use the exact same data structure from your API
+  const analysis = pr.analysis || {};
+  const categories = analysis.categories || {};
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
-      <p className="text-lg text-red-500">PR not found</p>
-    </div>
-  );
-}
+    <div className="prdetail-container">
+      {/* Header */}
+      <header className="prdetail-header">
+        <h1 className="prdetail-title">
+          Pull Request #{pr.prNumber}
+        </h1>
+        <div className="prdetail-repo">
+          Repository: <span className="repo-name">{pr.repoName}</span>
+        </div>
+      </header>
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Pull Request #{pr.prNumber}</h1>
-      <p className="text-gray-500">Repo: {pr.repoName}</p>
+      {/* Overall Score */}
+      <section className="overall-score-section">
+        <h2>Overall AI Score</h2>
+        <p className="score-subtitle">Automated review quality assessment</p>
+        <div className="score-circle">
+          <span className="score-value">{analysis.score ?? "N/A"}</span>
+        </div>
+      </section>
 
-      {/* AI Analysis Section */}
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold">🤖 AI Analysis</h2>
-        <p className="mt-2">Score: <strong>{pr.analysis?.score ?? "N/A"}</strong></p>
-        <p className="mt-2">Summary: {pr.analysis?.summary ?? "No summary yet"}</p>
+      <div className="prdetail-divider"></div>
 
-        {pr.analysis?.categories && (
-          <div className="mt-4">
-            <h3 className="font-semibold">Category Scores:</h3>
-            <ul className="list-disc list-inside text-sm text-gray-700">
-              <li>Lint & Style: {pr.analysis.categories.lint ?? "N/A"}</li>
-              <li>Bugs: {pr.analysis.categories.bugs ?? "N/A"}</li>
-              <li>Security: {pr.analysis.categories.security ?? "N/A"}</li>
-              <li>Performance: {pr.analysis.categories.performance ?? "N/A"}</li>
-            </ul>
+      {/* Category Scores */}
+      <section className="category-scores">
+        <h2>Category Scores</h2>
+        <div className="scores-grid">
+          <div className="score-card">
+            <h3>Lint & Style</h3>
+            <div className="score-percent">{categories.lint ?? "N/A"}</div>
+            <p className="score-description">
+              {categories.lint >= 70 
+                ? "Minor inconsistencies detected, but overall clean."
+                : categories.lint >= 40
+                ? "Several style issues need attention."
+                : "Major style and linting issues detected."}
+            </p>
           </div>
-        )}
-      </div>
+          
+          <div className="score-card">
+            <h3>Bug Detection</h3>
+            <div className="score-percent">{categories.bugs ?? "N/A"}</div>
+            <p className="score-description">
+              {categories.bugs >= 70 
+                ? "No critical bugs detected."
+                : categories.bugs >= 40
+                ? "Some potential issues identified."
+                : "Critical bugs requiring immediate attention."}
+            </p>
+          </div>
+          
+          <div className="score-card">
+            <h3>Security</h3>
+            <div className="score-percent">{categories.security ?? "N/A"}</div>
+            <p className="score-description">
+              {categories.security >= 70 
+                ? "No security vulnerabilities found."
+                : categories.security >= 40
+                ? "Minor security concerns identified."
+                : "Critical security vulnerabilities detected."}
+            </p>
+          </div>
+          
+          <div className="score-card">
+            <h3>Performance</h3>
+            <div className="score-percent">{categories.performance ?? "N/A"}</div>
+            <p className="score-description">
+              {categories.performance >= 70 
+                ? "Good performance with minor optimizations possible."
+                : categories.performance >= 40
+                ? "Performance improvements recommended."
+                : "Significant performance issues detected."}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="prdetail-divider"></div>
+
+      {/* AI Summary */}
+      <section className="ai-summary">
+        <h2>AI Summary</h2>
+        <p className="summary-text">{analysis.summary ?? "No summary yet"}</p>
+      </section>
+
+      <div className="prdetail-divider"></div>
 
       {/* Diff Section */}
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold">📄 Diff</h2>
-        <pre className="bg-gray-900 text-green-200 p-4 rounded mt-2 overflow-x-auto text-sm">
-          {pr.diff ?? "No changes"}
-        </pre>
-      </div>
+      {pr.diff && (
+        <section className="inline-comments">
+          <h2>Code Changes</h2>
+          <div className="comment-card">
+            <div className="code-block">
+              <pre className="code-content">
+                <code>{pr.diff}</code>
+              </pre>
+            </div>
+          </div>
+        </section>
+      )}
 
-   {/* Inline Comments Section */}
-<div className="mt-6">
-  <h2 className="text-xl font-semibold">💬 Inline Comments</h2>
-  {pr.analysis?.comments && pr.analysis.comments.length > 0 ? (
-    <ul className="mt-2 list-disc list-inside space-y-2">
-      {pr.analysis.comments.map((c, idx) => (
-        <li key={idx} className="bg-gray-100 p-2 rounded text-sm">
-          <strong>{c.path}:{c.line}</strong> — {c.body}
-        </li>
-      ))}
-    </ul>
-  ) : (
-    <p className="mt-2 text-gray-500">No inline comments.</p>
-  )}
-</div>
+      <div className="prdetail-divider"></div>
 
-{/* Fix Suggestions Section */}
-<div className="mt-6">
-  <h2 className="text-xl font-semibold">🛠 Fix Suggestions</h2>
-  {pr.analysis?.fix_suggestions && pr.analysis.fix_suggestions.length > 0 ? (
-    <div className="space-y-4 mt-2">
-      {pr.analysis.fix_suggestions.map((s, idx) => (
-        <div key={idx} className="bg-gray-900 text-green-200 p-4 rounded text-sm overflow-x-auto">
-          <p className="font-semibold mb-2">File: {s.path}</p>
-          <pre>{s.patch}</pre>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <p className="mt-2 text-gray-500">No fix suggestions.</p>
-  )}
-</div>
+      {/* Inline Comments */}
+      <section className="inline-comments">
+        <h2>Inline Comments</h2>
+        
+        {analysis.comments && analysis.comments.length > 0 ? (
+          analysis.comments.map((comment, idx) => (
+            <div key={idx} className="comment-card">
+              <div className="comment-header">
+                <span className="reviewer-name">{comment.path}:{comment.line}</span>
+              </div>
+              
+              <div className="comment-content">
+                <p className="comment-description">{comment.body}</p>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="comment-card">
+            <div className="comment-content">
+              <p className="comment-description">No inline comments.</p>
+            </div>
+          </div>
+        )}
+      </section>
 
+      {/* Fix Suggestions */}
+      {analysis.fix_suggestions && analysis.fix_suggestions.length > 0 ? (
+        <>
+          <div className="prdetail-divider"></div>
+          <section className="inline-comments">
+            <h2>Fix Suggestions</h2>
+            {analysis.fix_suggestions.map((suggestion, idx) => (
+              <div key={idx} className="comment-card">
+                <div className="comment-header">
+                  <span className="reviewer-name">File: {suggestion.path}</span>
+                </div>
+                <div className="comment-content">
+                  <div className="code-block">
+                    <pre className="code-content">
+                      <code>{suggestion.patch}</code>
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </section>
+        </>
+      ) : (
+        <>
+          <div className="prdetail-divider"></div>
+          <section className="inline-comments">
+            <h2>Fix Suggestions</h2>
+            <div className="comment-card">
+              <div className="comment-content">
+                <p className="comment-description">No fix suggestions.</p>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
+      {/* Footer */}
+      <footer className="prdetail-footer">
+        <p className="made-with">Made with CodeSage AI</p>
+      </footer>
     </div>
   );
 }
