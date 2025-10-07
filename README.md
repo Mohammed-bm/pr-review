@@ -99,19 +99,23 @@ Currently deployed on Render (Backend + AI) and Vercel (Frontend).
 Placeholders:  
 - Backend URL → (https://pr-review-backend.onrender.com/)  
 - AI Service URL → (https://pr-review-ai-nmkg.onrender.com/)  
-- Frontend URL → (https://pr-review-jykpp6mfd-mohammeds-projects-619be64e.vercel.app/login)
+- Frontend URL → (https://pr-review-ten.vercel.app/login)
 
 ---
 
 ## 📸 Sample Screenshots 
 
 ![Login page ](images/login.png) 
-- Screenshot: Login 
+- Screenshot: Login
+
+![Login page ](images/register.png) 
+- Screenshot: Register 
 
 ![Dashboard ](images/prlist.png) 
 - Screenshot: Dashboard listing PR reviews with score breakdown
 
 ![PR-review ](images/reviewpr.png) 
+![PR-review ](images/reviewpr2.png) 
 - Screenshot: GitHub PR with AI-generated review
 
 ![PR-reiw comment ](images/reviewprcomment.png) 
