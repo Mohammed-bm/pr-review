@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain.schema import HumanMessage
 from langgraph.graph import StateGraph, END
 from typing import List, Dict, Any, TypedDict
