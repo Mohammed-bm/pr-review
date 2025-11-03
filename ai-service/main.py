@@ -6,15 +6,11 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
 from typing import List, Dict, Any, TypedDict
 from dotenv import load_dotenv
-import os, json, asyncio, re, time
+import os, json, asyncio, re
 
 load_dotenv()
 
-app = FastAPI(
-    title="AI Code Reviewer - Optimized",
-    description="Fast AI code review service with timeout handling",
-    version="1.0.0"
-)
+app = FastAPI(title="AI Code Reviewer - LangGraph Implementation")
 
 # --------------------
 # Input / Output Models
@@ -35,27 +31,22 @@ class FinalOutput(BaseModel):
 # LLM Setup
 # --------------------
 llm = ChatOpenAI(
-    model="gpt-4o-mini",
+    model="gpt-4o-mini",   # lightweight, faster, cheaper
     temperature=0,
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
 # --------------------
-# Enhanced Diff Validation
+# Diff Validation Function
 # --------------------
 def validate_diff(diff: str) -> bool:
-    """Check if the diff is valid and not too large"""
+    """Check if the diff is valid and non-empty"""
     if not diff or not diff.strip():
-        return False
-    
-    # Limit diff size to prevent timeouts
-    if len(diff) > 50000:  # ~50KB max
-        print(f"⚠️ Diff too large: {len(diff)} characters")
         return False
     
     # Basic check for diff format
     diff_lines = diff.strip().split('\n')
-    if len(diff_lines) < 3:
+    if len(diff_lines) < 3:  # Too short to be a real diff
         return False
     
     # Check for common diff markers
@@ -67,57 +58,36 @@ def validate_diff(diff: str) -> bool:
 def extract_json(response_text: str) -> dict:
     """Extract the first valid JSON block from the LLM response."""
     try:
-        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
+        match = re.search(r"\{.*\}", response_text, re.S)  # grab {...} including multiline
         if match:
-            json_str = match.group(0)
-            # Clean up common formatting issues
-            json_str = re.sub(r',\s*}', '}', json_str)
-            json_str = re.sub(r',\s*]', ']', json_str)
-            return json.loads(json_str)
+            return json.loads(match.group(0))
     except Exception as e:
         print(f"❌ JSON extract error: {e}")
-    
-    # Fallback: try to find any JSON-like structure
-    try:
-        matches = re.findall(r'\{.*?\}', response_text, re.DOTALL)
-        for match in matches:
-            try:
-                if 'score' in match and 'issues' in match:
-                    return json.loads(match)
-            except:
-                continue
-    except:
-        pass
-    
+        print(f"Raw LLM output (truncated): {response_text[:200]}...")
     return {"score": 0, "issues": ["Failed to parse analysis"]}
 
 # --------------------
-# Optimized Agent Definitions
+# Agent Definitions with Error Handling
 # --------------------
 class LintAndStyleAgent:
     def __init__(self):
-        self.system_prompt = "Lint & Style Checker. Analyze code for formatting, naming, style issues. Be concise."
-
+        self.system_prompt = "You are a Lint & Style Checker. Review code for formatting, naming conventions, and style issues."
+    
     async def analyze(self, diff: str) -> Dict[str, Any]:
         try:
-            # Truncate very large diffs
-            truncated_diff = diff[:2000] + "..." if len(diff) > 2000 else diff
-            
             prompt = f"""
-            Analyze code style issues in this diff. Focus on major problems only.
+            {self.system_prompt}
             
-            Diff:
-            {truncated_diff}
+            Analyze this diff for code style issues:
+            {diff}
             
-            Return JSON: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
-            Keep responses brief.
+            Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            result = extract_json(response.content)
-            if 'issues' not in result:
-                result['issues'] = []
-            return result
+            response_text = response.content
+            
+            # Try to parse JSON, return default if fails
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Lint agent error: {e}")
@@ -125,26 +95,22 @@ class LintAndStyleAgent:
 
 class BugDetectionAgent:
     def __init__(self):
-        self.system_prompt = "Bug Detector. Analyze code for logical or functional bugs. Be concise."
-
+        self.system_prompt = "You are a Bug Detector. Analyze code for logical or functional bugs."
+    
     async def analyze(self, diff: str) -> Dict[str, Any]:
         try:
-            truncated_diff = diff[:2000] + "..." if len(diff) > 2000 else diff
-            
             prompt = f"""
-            Analyze this diff for potential bugs. Focus on critical issues.
+            {self.system_prompt}
             
-            Diff:
-            {truncated_diff}
+            Analyze this diff for potential bugs:
+            {diff}
             
-            Return JSON: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
+            Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            result = extract_json(response.content)
-            if 'issues' not in result:
-                result['issues'] = []
-            return result
+            response_text = response.content
+            
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Bug agent error: {e}")
@@ -152,26 +118,22 @@ class BugDetectionAgent:
 
 class SecurityScannerAgent:
     def __init__(self):
-        self.system_prompt = "Security Scanner. Review code for vulnerabilities, secrets, or risky patterns."
-
+        self.system_prompt = "You are a Security Scanner. Review code for vulnerabilities, secrets, or risky patterns."
+    
     async def analyze(self, diff: str) -> Dict[str, Any]:
         try:
-            truncated_diff = diff[:2000] + "..." if len(diff) > 2000 else diff
-            
             prompt = f"""
-            Analyze this diff for security issues. Focus on critical risks.
+            {self.system_prompt}
             
-            Diff:
-            {truncated_diff}
+            Analyze this diff for security issues:
+            {diff}
             
-            Return JSON: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
+            Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            result = extract_json(response.content)
-            if 'issues' not in result:
-                result['issues'] = []
-            return result
+            response_text = response.content
+            
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Security agent error: {e}")
@@ -179,26 +141,22 @@ class SecurityScannerAgent:
 
 class PerformanceReviewAgent:
     def __init__(self):
-        self.system_prompt = "Performance Reviewer. Review code for inefficiencies or bottlenecks."
-
+        self.system_prompt = "You are a Performance Reviewer. Review code for inefficiencies or bottlenecks."
+    
     async def analyze(self, diff: str) -> Dict[str, Any]:
         try:
-            truncated_diff = diff[:2000] + "..." if len(diff) > 2000 else diff
-            
             prompt = f"""
-            Analyze this diff for performance issues. Focus on major bottlenecks.
+            {self.system_prompt}
             
-            Diff:
-            {truncated_diff}
+            Analyze this diff for performance issues:
+            {diff}
             
-            Return JSON: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
+            Return a JSON with: {{"score": 0-100, "issues": ["issue1", "issue2"]}}
             """
-            
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            result = extract_json(response.content)
-            if 'issues' not in result:
-                result['issues'] = []
-            return result
+            response_text = response.content
+            
+            return extract_json(response_text)
                 
         except Exception as e:
             print(f"❌ Performance agent error: {e}")
@@ -209,9 +167,12 @@ class CoordinatorAgent:
         self.system_prompt = """
         You are a Coordinator Agent. Merge results from multiple code review agents.
 
-        CRITICAL: You MUST return ALL required fields in the exact JSON structure.
+        When creating the final JSON:
+        - Always include a "line" number for every comment.
+        - If you cannot determine the exact line, pick the first changed line in the corresponding @@ hunk.
+        - Never leave "line" as null.
         """
-
+    
     async def coordinate(self, results: Dict[str, Any]) -> Dict[str, Any]:
         try:
             prompt = f"""
@@ -220,352 +181,217 @@ class CoordinatorAgent:
             Merge these analysis results into a final review:
             {json.dumps(results, indent=2)}
             
-            Return JSON with this EXACT structure - ALL fields are REQUIRED:
+            Return a JSON with this exact structure:
             {{
-              "score": <0-100 overall score>,
+              "score": <0-100 overall score (INTEGER ONLY)>,
               "categories": {{
-                "lint": <0-100>,
-                "bugs": <0-100>,
-                "security": <0-100>,
-                "performance": <0-100>
+                "lint": <0-100 INTEGER>,
+                "bugs": <0-100 INTEGER>,
+                "security": <0-100 INTEGER>,
+                "performance": <0-100 INTEGER>
               }},
-              "summary": "Brief overall summary of the code review",
+              "summary": "short overall summary",
               "comments": [
-                {{
-                  "path": "file.js",
-                  "line": 12, 
-                  "body": "Specific feedback about the code"
-                }}
+                {{ "path": "file.js", "line": 12, "body": "feedback" }}
               ],
               "fix_suggestions": [
-                {{
-                  "path": "file.js",
-                  "patch": "-  old_code\\n+  new_code",
-                  "description": "What this fix addresses"
-                }}
+                {{ "path": "file.js", "patch": "diff/udiff..." }}
               ]
             }}
-            
-            IMPORTANT: All fields (score, categories, summary, comments, fix_suggestions) are REQUIRED.
-            Generate at least 2 fix_suggestions and 1 comment.
             """
-
             response = await llm.ainvoke([HumanMessage(content=prompt)])
             response_text = response.content
-            print(f"📋 Coordinator raw response: {response_text[:500]}...")
             
-            final_result = extract_json(response_text)
-            print(f"🔍 Parsed coordinator result: {final_result}")
-            
-            # VALIDATE AND ENSURE ALL REQUIRED FIELDS EXIST
-            final_result = self._validate_and_complete_result(final_result, results)
-            
-            return final_result
+            # Try to parse JSON, return default if fails
+            try:
+                final_result = extract_json(response_text)
+                
+                # Convert all scores to integers
+                final_result = self._ensure_integer_scores(final_result)
+                
+                # Ensure arrays are never empty objects
+                if isinstance(final_result.get('comments'), dict):
+                    final_result['comments'] = []
+                if isinstance(final_result.get('fix_suggestions'), dict):
+                    final_result['fix_suggestions'] = []
+                
+                return final_result
+                
+            except json.JSONDecodeError:
+                print(f"❌ JSON parse error in Coordinator: {response_text}")
+                return self._get_default_response()
                 
         except Exception as e:
             print(f"❌ Coordinator agent error: {e}")
-            return self._get_default_response_with_fixes()
+            return self._get_default_response()
     
-    def _validate_and_complete_result(self, result: Dict[str, Any], original_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure the result has all required fields with proper structure"""
-        # Ensure score exists and is integer
-        if 'score' not in result:
-            result['score'] = 50
-        result['score'] = int(round(float(result['score'])))
+    def _ensure_integer_scores(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure all scores are integers, not floats"""
+        # Convert main score
+        if 'score' in result:
+            result['score'] = int(round(result['score']))
         
-        # Ensure categories exist with all required sub-fields
-        if 'categories' not in result or not isinstance(result['categories'], dict):
-            result['categories'] = {}
-        
-        required_categories = ['lint', 'bugs', 'security', 'performance']
-        for category in required_categories:
-            if category not in result['categories']:
-                # Try to get from original results or use default
-                if category in original_results and 'score' in original_results[category]:
-                    result['categories'][category] = int(round(float(original_results[category]['score'])))
-                else:
-                    result['categories'][category] = 50
-            else:
-                result['categories'][category] = int(round(float(result['categories'][category])))
-        
-        # Ensure summary exists
-        if 'summary' not in result or not result['summary']:
-            result['summary'] = "Code review completed with suggested improvements."
-        
-        # Ensure comments exist and is a list
-        if 'comments' not in result or not isinstance(result['comments'], list):
-            result['comments'] = []
-        
-        # Ensure at least one comment exists
-        if len(result['comments']) == 0:
-            result['comments'] = [{
-                "path": "src/app.js",
-                "line": 1,
-                "body": "Please review the code changes and implement the suggested fixes."
-            }]
-        
-        # Ensure each comment has required fields
-        for comment in result['comments']:
-            if 'path' not in comment:
-                comment['path'] = 'src/app.js'
-            if 'line' not in comment:
-                comment['line'] = 1
-            if 'body' not in comment:
-                comment['body'] = 'Code review comment'
-        
-        # Ensure fix_suggestions exist and is a list
-        if 'fix_suggestions' not in result or not isinstance(result['fix_suggestions'], list):
-            result['fix_suggestions'] = []
-        
-        # Ensure at least 2 fix suggestions exist
-        if len(result['fix_suggestions']) < 2:
-            result['fix_suggestions'] = self._generate_fallback_fixes(original_results)
-        
-        # Ensure each fix_suggestion has required fields
-        for fix in result['fix_suggestions']:
-            if 'path' not in fix:
-                fix['path'] = 'src/app.js'
-            if 'patch' not in fix:
-                fix['patch'] = "# Fix needed\n-  // Problematic code\n+  // Fixed code"
-            if 'description' not in fix:
-                fix['description'] = 'Code improvement'
+        # Convert category scores
+        if 'categories' in result:
+            for category in ['lint', 'bugs', 'security', 'performance']:
+                if category in result['categories']:
+                    result['categories'][category] = int(round(result['categories'][category]))
         
         return result
     
-    def _generate_fallback_fixes(self, results: Dict[str, Any]) -> List[Dict]:
-        """Generate fix suggestions when LLM fails to provide enough"""
-        fixes = [
-            {
-                "path": "frontend/src/App.js",
-                "patch": "- eval(alert)\n+ // Remove dangerous eval function",
-                "description": "Security: Remove eval() which poses security risks"
-            },
-            {
-                "path": "src/app.js",
-                "patch": "- for(i=0)\n+ for(let i = 0; i < limit; i++)",
-                "description": "Fix incomplete for loop structure"
-            },
-            {
-                "path": "src/utils.js",
-                "patch": "- const x = data\n+ const userData = data",
-                "description": "Use descriptive variable names"
-            }
-        ]
-        return fixes
-    
-    def _get_default_response_with_fixes(self) -> Dict[str, Any]:
-        """Return a complete default response with all required fields"""
+    def _get_default_response(self) -> Dict[str, Any]:
+        """Return a default response when coordination fails"""
         return {
-            "score": 50,
+            "score": 0,
             "categories": {
-                "lint": 50,
-                "bugs": 50,
-                "security": 50,
-                "performance": 50
+                "lint": 0,
+                "bugs": 0,
+                "security": 0,
+                "performance": 0
             },
-            "summary": "Analysis completed with suggested improvements.",
-            "comments": [
-                {
-                    "path": "src/app.js",
-                    "line": 1,
-                    "body": "Please review the code changes and implement the suggested fixes."
-                }
-            ],
-            "fix_suggestions": [
-                {
-                    "path": "frontend/src/App.js",
-                    "patch": "- eval(alert)\n+ // Safe alternative to eval",
-                    "description": "Remove dangerous eval function"
-                },
-                {
-                    "path": "src/app.js",
-                    "patch": "- for(i=0)\n+ for(let i = 0; i < array.length; i++)",
-                    "description": "Fix incomplete loop structure"
-                }
-            ]
+            "summary": "Analysis failed due to an internal error.",
+            "comments": [],
+            "fix_suggestions": []
         }
-
-def _validate_final_output(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Final validation to ensure response matches Pydantic model"""
-    required_fields = ['score', 'categories', 'summary', 'comments', 'fix_suggestions']
-    for field in required_fields:
-        if field not in result:
-            if field == 'score':
-                result['score'] = 50
-            elif field == 'categories':
-                result['categories'] = {"lint": 50, "bugs": 50, "security": 50, "performance": 50}
-            elif field == 'summary':
-                result['summary'] = "Code review completed"
-            elif field == 'comments':
-                result['comments'] = []
-            elif field == 'fix_suggestions':
-                result['fix_suggestions'] = []
-    
-    return result
+# --------------------
+# State Definition for LangGraph
+# --------------------
+class AgentState(TypedDict):
+    diff: str
+    lint_result: Dict[str, Any]
+    bug_result: Dict[str, Any]
+    security_result: Dict[str, Any]
+    performance_result: Dict[str, Any]
+    final_result: Dict[str, Any]
 
 # --------------------
-# Optimized Main Endpoint with Timeout Handling
+# LangGraph Implementation
+# --------------------
+def create_review_graph():
+    # Use StateGraph instead of Graph
+    workflow = StateGraph(AgentState)
+    
+    # Define nodes with proper state handling
+    async def run_lint_agent(state: AgentState):
+        agent = LintAndStyleAgent()
+        result = await agent.analyze(state["diff"])
+        return {"lint_result": result}
+    
+    async def run_bug_agent(state: AgentState):
+        agent = BugDetectionAgent()
+        result = await agent.analyze(state["diff"])
+        return {"bug_result": result}
+    
+    async def run_security_agent(state: AgentState):
+        agent = SecurityScannerAgent()
+        result = await agent.analyze(state["diff"])
+        return {"security_result": result}
+    
+    async def run_performance_agent(state: AgentState):
+        agent = PerformanceReviewAgent()
+        result = await agent.analyze(state["diff"])
+        return {"performance_result": result}
+    
+    async def run_coordinator(state: AgentState):
+        agent = CoordinatorAgent()
+        results = {
+            "lint": state["lint_result"],
+            "bugs": state["bug_result"],
+            "security": state["security_result"],
+            "performance": state["performance_result"]
+        }
+        final_result = await agent.coordinate(results)
+        return {"final_result": final_result}
+    
+    # Add nodes
+    workflow.add_node("lint_agent", run_lint_agent)
+    workflow.add_node("bug_agent", run_bug_agent)
+    workflow.add_node("security_agent", run_security_agent)
+    workflow.add_node("performance_agent", run_performance_agent)
+    workflow.add_node("coordinator", run_coordinator)
+    
+    # Set entry point
+    workflow.set_entry_point("lint_agent")
+    
+    # Define flow
+    workflow.add_edge("lint_agent", "bug_agent")
+    workflow.add_edge("bug_agent", "security_agent")
+    workflow.add_edge("security_agent", "performance_agent")
+    workflow.add_edge("performance_agent", "coordinator")
+    workflow.add_edge("coordinator", END)
+    
+    return workflow.compile()
+
+# Create the graph
+review_graph = create_review_graph()
+
+# --------------------
+# Endpoint with Validation
 # --------------------
 @app.post("/analyze", response_model=FinalOutput)
 async def analyze_diff(data: DiffInput):
-    start_time = time.time()
-    
     try:
-        # Validate diff early with size limits
+        # ✅ 1. Validate diff early
         if not validate_diff(data.diff):
             return {
                 "score": 0,
-                "categories": {"lint": 0, "bugs": 0, "security": 0, "performance": 0},
-                "summary": "Invalid or too large diff provided",
+                "categories": {
+                    "lint": 0,
+                    "bugs": 0,
+                    "security": 0,
+                    "performance": 0
+                },
+                "summary": "No code changes detected or invalid diff provided.",
                 "comments": [],
                 "fix_suggestions": []
             }
 
-        print(f"🔍 Analyzing diff with {len(data.diff)} characters...")
+        diff = data.diff
 
-        # Create agents
-        agents = {
-            'lint': LintAndStyleAgent(),
-            'bugs': BugDetectionAgent(),
-            'security': SecurityScannerAgent(),
-            'performance': PerformanceReviewAgent()
-        }
+        # ✅ 2. Create agents
+        lint_agent = LintAndStyleAgent()
+        bug_agent = BugDetectionAgent()
+        security_agent = SecurityScannerAgent()
+        performance_agent = PerformanceReviewAgent()
 
-        # Run agents with individual timeouts
-        async def run_agent_with_timeout(agent_name, agent, diff):
-            try:
-                return await asyncio.wait_for(
-                    agent.analyze(diff),
-                    timeout=10.0  # 10 seconds per agent
-                )
-            except asyncio.TimeoutError:
-                print(f"⏰ {agent_name} agent timed out")
-                return {"score": 0, "issues": [f"{agent_name} analysis timed out"]}
-            except Exception as e:
-                print(f"❌ {agent_name} agent error: {e}")
-                return {"score": 0, "issues": [f"{agent_name} analysis failed"]}
+        # ✅ 3. Semaphore to prevent 429 (limit concurrent LLM calls)
+        semaphore = asyncio.Semaphore(2)
 
-        # Run all agents concurrently
-        tasks = []
-        for agent_name, agent in agents.items():
-            task = run_agent_with_timeout(agent_name, agent, data.diff)
-            tasks.append(task)
+        async def safe_analyze(agent, diff):
+            async with semaphore:
+                return await agent.analyze(diff)
 
-        # Wait for all agents with overall timeout
-        try:
-            agents_results_list = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=30.0  # 30 seconds total for all agents
-            )
-        except asyncio.TimeoutError:
-            print("⏰ Overall agent analysis timed out")
-            return {
-                "score": 50,
-                "categories": {"lint": 50, "bugs": 50, "security": 50, "performance": 50},
-                "summary": "Analysis timed out - try with smaller code changes",
-                "comments": [{"path": "src/app.js", "line": 1, "body": "Analysis timeout - review manually"}],
-                "fix_suggestions": [
-                    {
-                        "path": "src/app.js",
-                        "patch": "# Analysis timeout - review code manually",
-                        "description": "Manual review required due to processing limits"
-                    }
-                ]
-            }
+        # ✅ 4. Run all 4 agents in parallel
+        lint_result, bug_result, security_result, performance_result = await asyncio.gather(
+            safe_analyze(lint_agent, diff),
+            safe_analyze(bug_agent, diff),
+            safe_analyze(security_agent, diff),
+            safe_analyze(performance_agent, diff)
+        )
 
-        # Process results
-        agents_results = {}
-        for agent_name, result in zip(agents.keys(), agents_results_list):
-            if isinstance(result, Exception):
-                agents_results[agent_name] = {"score": 0, "issues": ["Analysis failed"]}
-            else:
-                agents_results[agent_name] = result
+        # ✅ 5. Coordinate results (final aggregation)
+        coordinator = CoordinatorAgent()
+        final_result = await coordinator.coordinate({
+            "lint": lint_result,
+            "bugs": bug_result,
+            "security": security_result,
+            "performance": performance_result
+        })
 
-        # Run coordinator with timeout
-        try:
-            coordinator = CoordinatorAgent()
-            final_result = await asyncio.wait_for(
-                coordinator.coordinate(agents_results),
-                timeout=15.0  # 15 seconds for coordinator
-            )
-        except asyncio.TimeoutError:
-            print("⏰ Coordinator timed out")
-            final_result = {
-                "score": 50,
-                "categories": {"lint": 50, "bugs": 50, "security": 50, "performance": 50},
-                "summary": "Analysis completed with time constraints",
-                "comments": [{"path": "unknown", "line": 1, "body": "Analysis was limited due to timeout"}],
-                "fix_suggestions": [
-                    {
-                        "path": "src/app.js",
-                        "patch": "# Analysis timeout - review code manually",
-                        "description": "Manual review required due to processing limits"
-                    }
-                ]
-            }
-
-        # Final validation to ensure response matches FinalOutput model
-        final_result = _validate_final_output(final_result)
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        print(f"✅ Analysis completed in {processing_time:.2f}s")
-        
+        # ✅ 6. Return final result to backend
         return final_result
 
     except Exception as e:
-        processing_time = time.time() - start_time
-        print(f"❌ Critical error in analyze_diff after {processing_time:.2f}s: {e}")
-        # Return a valid response even on error
-        return {
-            "score": 0,
-            "categories": {"lint": 0, "bugs": 0, "security": 0, "performance": 0},
-            "summary": f"Analysis failed: {str(e)}",
-            "comments": [{"path": "error", "line": 1, "body": "Analysis service error"}],
-            "fix_suggestions": []
-        }
+        print(f"❌ Critical error in analyze_diff: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 # --------------------
-# Health Check Endpoints
+# Health Check Endpoint
 # --------------------
 @app.get("/")
 async def health_check():
-    return {
-        "status": "OK", 
-        "message": "Optimized AI Code Reviewer Service is running!",
-        "version": "1.0.0"
-    }
+    return {"status": "OK", "message": "AI Code Reviewer Service is running!"}
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "healthy", 
-        "service": "ai-code-reviewer",
-        "timestamp": time.time()
-    }
-
-@app.get("/status")
-async def status():
-    """Detailed status with performance info"""
-    return {
-        "status": "healthy",
-        "service": "ai-code-reviewer",
-        "version": "1.0.0",
-        "timestamp": time.time(),
-        "features": {
-            "timeout_handling": True,
-            "parallel_processing": True,
-            "diff_size_limits": True,
-            "fallback_fixes": True
-        }
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        app, 
-        host="0.0.0.0", 
-        port=8000,
-        timeout_keep_alive=120,
-        log_level="info"
-    )
+    return {"status": "healthy", "service": "ai-code-reviewer"}
