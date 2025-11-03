@@ -385,6 +385,24 @@ class CoordinatorAgent:
             ]
         }
 
+def _validate_final_output(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Final validation to ensure response matches Pydantic model"""
+    required_fields = ['score', 'categories', 'summary', 'comments', 'fix_suggestions']
+    for field in required_fields:
+        if field not in result:
+            if field == 'score':
+                result['score'] = 50
+            elif field == 'categories':
+                result['categories'] = {"lint": 50, "bugs": 50, "security": 50, "performance": 50}
+            elif field == 'summary':
+                result['summary'] = "Code review completed"
+            elif field == 'comments':
+                result['comments'] = []
+            elif field == 'fix_suggestions':
+                result['fix_suggestions'] = []
+    
+    return result
+
 # --------------------
 # Optimized Main Endpoint with Timeout Handling
 # --------------------
@@ -487,7 +505,7 @@ async def analyze_diff(data: DiffInput):
             }
 
         # Final validation to ensure response matches FinalOutput model
-        final_result = self._validate_final_output(final_result)
+        final_result = _validate_final_output(final_result)
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -506,24 +524,6 @@ async def analyze_diff(data: DiffInput):
             "comments": [{"path": "error", "line": 1, "body": "Analysis service error"}],
             "fix_suggestions": []
         }
-
-    def _validate_final_output(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Final validation to ensure response matches Pydantic model"""
-        required_fields = ['score', 'categories', 'summary', 'comments', 'fix_suggestions']
-        for field in required_fields:
-            if field not in result:
-                if field == 'score':
-                    result['score'] = 50
-                elif field == 'categories':
-                    result['categories'] = {"lint": 50, "bugs": 50, "security": 50, "performance": 50}
-                elif field == 'summary':
-                    result['summary'] = "Code review completed"
-                elif field == 'comments':
-                    result['comments'] = []
-                elif field == 'fix_suggestions':
-                    result['fix_suggestions'] = []
-        
-        return result
 
 # --------------------
 # Health Check Endpoints
