@@ -138,7 +138,7 @@ Here’s a brief explanation of how it works:
 
 ### 📊 Architecture Diagram
 
-![Architecture Diagram ](images/architecturediagram.png)  
+![Architecture Diagram ](images/architecture.png)  
 
 ---
 
