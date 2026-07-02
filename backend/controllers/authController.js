@@ -1,55 +1,58 @@
 const User = require("../models/user");
-const bcrypt = require("bcryptjs");
 const { generateToken } = require("../services/jwtService");
-const { validationResult } = require("express-validator");
+const { OAuth2Client } = require("google-auth-library");
 
-// @desc    Register new user
-// @route   POST /api/auth/register
-// @access  Public
-const registerUser = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const googleLogin = async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ msg: "ID Token is required" });
   }
 
-  const { email, password } = req.body;
-
   try {
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ msg: "User already exists" });
+    // 1. Verify the Google ID Token securely
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID, 
+    });
+    
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture: avatar } = payload;
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // 2. Look up the user by their unique Google ID
+    let user = await User.findOne({ googleId });
 
-    user = await User.create({ email, password: hashedPassword });
+    if (!user) {
+      // 3. Fallback: Match existing email to auto-link old accounts (if wiping dev database isn't complete)
+      user = await User.findOne({ email });
+      
+      if (user) {
+        user.googleId = googleId;
+        // Optionally store profile data if missing from the old account record
+        if (!user.name) user.name = name;
+        if (!user.avatar) user.avatar = avatar;
+        await user.save();
+      } else {
+        // 4. Create a brand new user document
+        user = await User.create({
+          googleId,
+          email,
+          name,
+          avatar,
+        });
+      }
+    }
 
+    // 5. Issue your existing JWT using your service (passing user._id matching your prior code)
     const token = generateToken(user._id);
-    res.status(201).json({ token });
+    
+    return res.json({ token });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server error");
+    console.error("Google Auth Error:", err.message);
+    return res.status(401).json({ msg: "Invalid or expired Google token" });
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
-const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ msg: "Invalid credentials" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ msg: "Invalid credentials" });
-
-    const token = generateToken(user._id);
-    res.json({ token });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server error");
-  }
-};
-
-module.exports = { registerUser, loginUser };
+module.exports = { googleLogin };
