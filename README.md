@@ -16,7 +16,7 @@ Designed with simplicity and scalability in mind, this project is built with Nod
 
 ## 🎯 Key Features
 
-- ✅ Secure JWT Authentication for Dashboard login  
+- ✅ Google OAuth 2.0 Single Sign-On (SSO) with seamless auto-registration  
 - ✅ GitHub Webhook listens for PR events  
 - ✅ AI-powered analysis: Lint, Bugs, Security, Performance  
 - ✅ Posts AI-generated review comments back to GitHub PR  
@@ -44,6 +44,7 @@ JWT_SECRET=[YOUR_JWT_SECRET]
 GITHUB_WEBHOOK_SECRET=[YOUR_SECRET]  
 GITHUB_TOKEN=[YOUR_GITHUB_PERSONAL_ACCESS_TOKEN]  
 VITE_API_URL=http://localhost:5000/api  
+GOOGLE_CLIENT_ID=[YOUR_GOOGLE_CLIENT_ID_FROM_CONSOLE]
 ```
 
 #### Example: `ai-services/.env`  

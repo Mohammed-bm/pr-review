@@ -6,11 +6,11 @@
   const webhookRoutes = require("./routes/webhookRoutes");
   const prRoutes = require("./routes/prRoutes");
   const { errorHandler } = require("./middleware/errorMiddleware");
-  const { protect } = require("./middleware/authMiddleware"); // ⬅ import middleware
+  const { protect } = require("./middleware/authMiddleware");
+  const path = require("path")
 
-  dotenv.config();
+  dotenv.config({ path: path.join(__dirname, ".env") });
   connectDB();
-require('dotenv').config();
 
   const app = express();
   app.use(express.json()); // parse JSON requests
