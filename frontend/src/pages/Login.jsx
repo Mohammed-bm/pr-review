@@ -1,31 +1,36 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { loginUser } from "../api/auth";
+import { useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
+import { loginWithGoogle } from "../api/auth";
 
 export default function Login() {
-  const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGoogleSuccess = async (credentialResponse) => {
     setError("");
     setLoading(true);
+    const idToken = credentialResponse.credential;
 
     try {
-      const data = await loginUser(formData);
+      // 1. Pass Google's token to your axios wrapper
+      const data = await loginWithGoogle(idToken);
+      
+      // 2. Persist your custom application session JWT
       localStorage.setItem("token", data.token);
+      
+      // 3. Route user to the root dashboard
       navigate("/");
     } catch (err) {
-      setError("Invalid email or password");
+      setError(err.response?.data?.msg || "Authentication with your backend server failed.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleFailure = () => {
+    setError("Google Sign-In was canceled or failed to execute.");
   };
 
   return (
@@ -35,102 +40,64 @@ export default function Login() {
         background: "var(--bg-primary)",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justify: "center",
         padding: "20px",
         fontFamily:
           "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
       }}
     >
-      <div className="register-container">
+      <div className="register-container" style={{ textAlign: "center" }}>
         {/* Header */}
-        <div className="register-header">
+        <div className="register-header" style={{ marginBottom: "2rem" }}>
           <h1 className="register-title">Welcome Back</h1>
           <p className="register-subtitle">
             Sign in to your AI Code Review Dashboard
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="register-form">
-          {/* Email Field */}
-          <div className="reg-form-group">
-            <label className="reg-form-label">Email Address</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              required
-              className="reg-form-input"
-            />
-            <span className="input-icon">✉️</span>
-          </div>
+        {/* Auth Interface Interface Wrapper */}
+        <div className="register-form" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "20px" }}>
+          
+          {/* Error Message Context Display */}
+          {error && <div className="error-box" style={{ width: "100%" }}>{error}</div>}
 
-          {/* Password Field */}
-          <div className="reg-form-group">
-            <label className="reg-form-label">Password</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              required
-              className="reg-form-input"
-            />
-            <span className="input-icon">🔒</span>
-          </div>
-
-          {/* Demo Hint */}
-          <div className="demo-box">
-            <strong>Demo:</strong> test@example.com / password123
-          </div>
-
-          {/* Error Message */}
-          {error && <div className="error-box">{error}</div>}
-
-          {/* Login Button */}
-          <button type="submit" className="register-button" disabled={loading}>
-            {loading ? (
+          {/* Loading Visual Indicator */}
+          {loading ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justify: "center",
+                gap: "8px",
+                color: "var(--text-secondary, #666)",
+              }}
+            >
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
+                  width: "16px",
+                  height: "16px",
+                  border: "2px solid transparent",
+                  borderTop: "2px solid currentColor",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
                 }}
-              >
-                <div
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    border: "2px solid transparent",
-                    borderTop: "2px solid white",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></div>
-                Signing in...
-              </div>
-            ) : (
-              "Login"
-            )}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <div className="register-footer">
-          <p className="register-footer-text">
-            Don’t have an account?{" "}
-            <Link to="/register" className="login-link">
-              Register here
-            </Link>
-          </p>
+              ></div>
+              Verifying account credentials...
+            </div>
+          ) : (
+            /* Managed Google Login Button Component */
+            <div style={{ margin: "10px 0" }}>
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleFailure}
+                useOneTap
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Spinner Animation */}
+      {/* Spinner Keyframe Styles */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
