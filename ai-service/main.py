@@ -3,10 +3,10 @@ from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
 from typing import List, Dict, Any, TypedDict
 from dotenv import load_dotenv
-import os, json, asyncio, re
+import os, json, asyncio
 
 load_dotenv()
 
@@ -28,6 +28,50 @@ class FinalOutput(BaseModel):
     comments: list
     fix_suggestions: list
 
+class Issue(BaseModel):
+    path: str
+    line: int
+    body: str
+
+from pydantic import BaseModel
+
+
+class Comment(BaseModel):
+    path: str
+    line: int
+    body: str
+
+
+class FixSuggestion(BaseModel):
+    path: str
+    patch: str
+
+
+class Categories(BaseModel):
+    lint: int
+    bugs: int
+    security: int
+    performance: int
+
+
+class CoordinatorResult(BaseModel):
+    score: int
+    categories: Categories
+    summary: str
+    comments: list[Comment]
+    fix_suggestions: list[FixSuggestion]
+
+class AgentResult(BaseModel):
+    score: int
+    issues: List[Issue]
+
+class AgentState(TypedDict, total=False):
+    diff: str
+    lint_result: Dict[str, Any]
+    bug_result: Dict[str, Any]
+    security_result: Dict[str, Any]
+    performance_result: Dict[str, Any]
+    final_result: Dict[str, Any]
 
 # --------------------
 # LLM Setup
@@ -35,8 +79,10 @@ class FinalOutput(BaseModel):
 llm = ChatGoogleGenerativeAI(
     model="gemini-flash-lite-latest",  # lightweight, faster, cheaper
     temperature=0,
-    GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY"),
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
 )
+
+structured_llm = llm.with_structured_output(AgentResult)
 
 # --------------------
 # Diff Validation Function
@@ -57,54 +103,6 @@ def validate_diff(diff: str) -> bool:
 
     return has_markers
 
-
-def extract_json(response_text: str) -> dict:
-    try:
-        # Log the raw text in the console so you can see exactly what Gemini replied
-        print(
-            f"--- RAW AGENT RESPONSE ---\n{response_text}\n-------------------------"
-        )
-
-        # 1. Clean out markdown wrapping formatting if present
-        cleaned = response_text.strip()
-        cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.IGNORECASE)
-
-        # 2. Use a robust regex to find the first open brace '{' to the last closing brace '}'
-        match = re.search(r"(\{.*\})", cleaned, re.DOTALL | re.MULTILINE)
-        if match:
-            return json.loads(match.group(1))
-
-        # 3. Last resort fallback parsing if regex misses the outer shell
-        return json.loads(cleaned)
-
-    except Exception as e:
-        print(f"❌ JSON structural extraction failed: {e}")
-        # Return a standard structured schema instead of breaking the pipeline
-        return {"score": 100, "comments": []}
-
-
-def get_text_from_response(response) -> str:
-    """Handle both string and list-of-blocks content formats."""
-    content = response.content
-
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, list):
-        parts = []
-
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-            elif isinstance(block, str):
-                parts.append(block)
-
-        return "".join(parts)
-
-    return str(content)
-
-
 # --------------------
 # Agent Definitions with Error Handling
 # --------------------
@@ -117,6 +115,7 @@ class LintAndStyleAgent:
 
 
     async def analyze(self, diff: str) -> Dict[str, Any]:
+        print("RUNNING LINT")
         try:
             prompt = f"""
             {self.system_prompt}
@@ -124,13 +123,14 @@ class LintAndStyleAgent:
             Diff to review:
             {diff}
 
-            For each style/formatting/naming issue found, return JSON in this exact shape:
-            {{
-            "score": 0-100,
-            "issues": [
-                {{"path": "file.js", "line": 12, "body": "issue description"}}
-            ]
-            }}
+            Find style issues in the diff.
+
+            For each issue provide:
+            - path
+            - line
+            - body
+
+            Return all findings.
 
             Rules:
             - Only use file paths that appear after "diff --git a/... b/..." or "+++ b/..." lines.
@@ -139,9 +139,11 @@ class LintAndStyleAgent:
             - Return ONLY valid JSON, no extra commentary.
             """
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            response_text = get_text_from_response(response)
-            return extract_json(response_text)
+            result = await structured_llm.ainvoke(
+                [HumanMessage(content=prompt)]
+            )
+
+            return result.model_dump()
 
         except Exception as e:
             print(f"❌ Lint agent error: {e}")
@@ -156,6 +158,7 @@ class BugDetectionAgent:
 
 
     async def analyze(self, diff: str) -> Dict[str, Any]:
+        print("RUNNING BUG")
         try:
             prompt = f"""
             {self.system_prompt}
@@ -178,9 +181,11 @@ class BugDetectionAgent:
             - Return ONLY valid JSON, no extra commentary.
             """
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            response_text = get_text_from_response(response)
-            return extract_json(response_text)
+            result = await structured_llm.ainvoke(
+                [HumanMessage(content=prompt)]
+            )
+
+            return result.model_dump()
 
         except Exception as e:
             print(f"❌ Bug agent error: {e}")
@@ -195,6 +200,7 @@ class SecurityScannerAgent:
         )
 
     async def analyze(self, diff: str) -> Dict[str, Any]:
+        print("RUNNING SECURITY")
         try:
             prompt = f"""
             {self.system_prompt}
@@ -217,9 +223,11 @@ class SecurityScannerAgent:
             - Return ONLY valid JSON, no extra commentary.
             """
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            response_text = get_text_from_response(response)
-            return extract_json(response_text)
+            result = await structured_llm.ainvoke(
+                [HumanMessage(content=prompt)]
+            )
+
+            return result.model_dump()
 
         except Exception as e:
             print(f"❌ Security agent error: {e}")
@@ -234,6 +242,7 @@ class PerformanceReviewAgent:
         )
 
     async def analyze(self, diff: str) -> Dict[str, Any]:
+        print("RUNNING PERFORMANCE")
         try:
             prompt = f"""
             {self.system_prompt}
@@ -256,9 +265,11 @@ class PerformanceReviewAgent:
             - Return ONLY valid JSON, no extra commentary.
             """
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            response_text = get_text_from_response(response)
-            return extract_json(response_text)
+            result = await structured_llm.ainvoke(
+                [HumanMessage(content=prompt)]
+            )
+
+            return result.model_dump()
 
         except Exception as e:
             print(f"❌ Performance agent error: {e}")
@@ -274,6 +285,7 @@ class CoordinatorAgent:
 
 
     async def coordinate(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        print("RUNNING COORDINATOR")
         try:
             prompt = f"""
             {self.system_prompt}
@@ -305,30 +317,17 @@ class CoordinatorAgent:
             - "fix_suggestions" can still be generated by you based on the merged issues.
             """
 
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
-            response_text = get_text_from_response(response)
+            structured_llm = llm.with_structured_output(CoordinatorResult)
 
-            # ... rest stays the same (extract_json, _ensure_integer_scores, etc.)
+            result = await structured_llm.ainvoke(
+                [HumanMessage(content=prompt)]
+            )
 
-            # Try to parse JSON, return default if fails
-            try:
-                final_result = extract_json(response_text)
+            final_result = result.model_dump()
 
-                # Convert all scores to integers
-                final_result = self._ensure_integer_scores(final_result)
+            final_result = self._ensure_integer_scores(final_result)
 
-                # Ensure arrays are never empty objects
-                if isinstance(final_result.get("comments"), dict):
-                    final_result["comments"] = []
-
-                if isinstance(final_result.get("fix_suggestions"), dict):
-                    final_result["fix_suggestions"] = []
-
-                return final_result
-
-            except json.JSONDecodeError:
-                print(f"❌ JSON parse error in Coordinator: {response_text}")
-                return self._get_default_response()
+            return final_result
 
         except Exception as e:
             print(f"❌ Coordinator agent error: {e}")
@@ -426,14 +425,18 @@ def create_review_graph():
     workflow.add_node("performance_agent", run_performance_agent)
     workflow.add_node("coordinator", run_coordinator)
 
-    # Set entry point
-    workflow.set_entry_point("lint_agent")
+    # Fan out from START to all review agents
+    workflow.add_edge(START, "lint_agent")
+    workflow.add_edge(START, "bug_agent")
+    workflow.add_edge(START, "security_agent")
+    workflow.add_edge(START, "performance_agent")
 
-    # Define flow
-    workflow.add_edge("lint_agent", "bug_agent")
-    workflow.add_edge("bug_agent", "security_agent")
-    workflow.add_edge("security_agent", "performance_agent")
+    # Fan in to coordinator
+    workflow.add_edge("lint_agent", "coordinator")
+    workflow.add_edge("bug_agent", "coordinator")
+    workflow.add_edge("security_agent", "coordinator")
     workflow.add_edge("performance_agent", "coordinator")
+
     workflow.add_edge("coordinator", END)
 
     return workflow.compile()
@@ -465,46 +468,18 @@ async def analyze_diff(data: DiffInput):
 
         diff = data.diff
 
-        # ✅ 2. Create agents
-        lint_agent = LintAndStyleAgent()
-        bug_agent = BugDetectionAgent()
-        security_agent = SecurityScannerAgent()
-        performance_agent = PerformanceReviewAgent()
+        initial_state = {
+            "diff": diff,
+            "lint_result": {},
+            "bug_result": {},
+            "security_result": {},
+            "performance_result": {},
+            "final_result": {},
+        }
 
-        # ✅ 3. Semaphore to prevent 429 (limit concurrent LLM calls)
-        semaphore = asyncio.Semaphore(2)
+        final_state = await review_graph.ainvoke(initial_state)
 
-        async def safe_analyze(agent, diff):
-            async with semaphore:
-                return await agent.analyze(diff)
-
-        # ✅ 4. Run all 4 agents in parallel
-        (
-            lint_result,
-            bug_result,
-            security_result,
-            performance_result,
-        ) = await asyncio.gather(
-            safe_analyze(lint_agent, diff),
-            safe_analyze(bug_agent, diff),
-            safe_analyze(security_agent, diff),
-            safe_analyze(performance_agent, diff),
-        )
-
-        # ✅ 5. Coordinate results (final aggregation)
-        coordinator = CoordinatorAgent()
-
-        final_result = await coordinator.coordinate(
-            {
-                "lint": lint_result,
-                "bugs": bug_result,
-                "security": security_result,
-                "performance": performance_result,
-            }
-        )
-
-        # ✅ 6. Return final result to backend
-        return final_result
+        return final_state["final_result"]
 
     except Exception as e:
         print(f"❌ Critical error in analyze_diff: {e}")
